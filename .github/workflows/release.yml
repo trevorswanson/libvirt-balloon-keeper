@@ -47,6 +47,6 @@ jobs:
             "dist/libvirt-balloon-keeper-${TAG#v}.tar.gz.sha256" \
             "dist/libvirt-balloon-keeper.tar.gz" \
             "dist/libvirt-balloon-keeper.tar.gz.sha256" \
-            --verify-tag "$TAG" \
+            --verify-tag \
             --title "$TAG" \
             --generate-notes
