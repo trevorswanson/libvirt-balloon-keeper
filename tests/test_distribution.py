@@ -47,6 +47,7 @@ class DistributionMetadataTests(unittest.TestCase):
         self.assertIn("releases/latest/download/libvirt-balloon-keeper.tar.gz", text)
         self.assertIn("releases/latest/download/libvirt-balloon-keeper.tar.gz.sha256", text)
         self.assertIn('sha256sum "$archive"', text)
+        self.assertIn("2026.09.01", text)
         self.assertIn("bash /tmp/libvirt-balloon-keeper-release/unraid/lifecycle.sh install", text)
         self.assertIn("/boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh uninstall", text)
         self.assertNotIn("127.0.0.1", text)
@@ -55,10 +56,11 @@ class DistributionMetadataTests(unittest.TestCase):
     def test_release_workflow_is_tag_driven_and_publishes_stable_assets(self):
         text = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn("tags:", text)
-        self.assertIn("'v*.*.*'", text)
+        self.assertIn("'????.??.??'", text)
         self.assertIn("actions/checkout@v4", text)
         self.assertIn("gh release create", text)
-        self.assertIn("libvirt-balloon-keeper.tar.gz", text)
+        self.assertIn("--verify-tag", text)
+        self.assertNotIn("--verify-tag \"$TAG\"", text)
 
     def test_test_workflow_builds_and_uploads_package(self):
         text = (ROOT / ".github/workflows/test.yml").read_text()

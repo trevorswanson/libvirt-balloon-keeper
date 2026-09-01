@@ -14,13 +14,10 @@ the same checks and review rule.
 
 ## Releases
 
-Push an annotated semantic-version tag such as `v0.1.1` after merging a
-release-ready change. The release workflow reruns the test and syntax gates,
-builds the deterministic package, verifies its checksum, and publishes these
-assets to the GitHub release:
+Push a date-version tag such as `2026.09.01` after merging a release-ready change. The release workflow reruns the test and syntax gates, builds the deterministic package, verifies its checksum, and publishes these assets to the GitHub release:
 
-- `libvirt-balloon-keeper-0.1.1.tar.gz`
-- `libvirt-balloon-keeper-0.1.1.tar.gz.sha256`
+- `libvirt-balloon-keeper-2026.09.01.tar.gz`
+- `libvirt-balloon-keeper-2026.09.01.tar.gz.sha256`
 - `libvirt-balloon-keeper.tar.gz` (stable installer target)
 - `libvirt-balloon-keeper.tar.gz.sha256`
 
