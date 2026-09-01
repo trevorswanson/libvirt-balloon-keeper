@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name "libvirt-balloon-keeper">
+  <!ENTITY version "latest">
+  <!ENTITY author "Trevor Swanson">
+  <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
+]>
+<PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
+  <CHANGES>
+    &version;
+    - Initial Community Applications release.
+  </CHANGES>
+  <FILE Name="/tmp/libvirt-balloon-keeper.tar.gz">
+    https://github.com/trevorswanson/libvirt-balloon-keeper/releases/latest/download/libvirt-balloon-keeper.tar.gz
+  </FILE>
+  <INSTALL plugin="&name;">
+    <![CDATA[
+      set -eu
+      archive="/tmp/libvirt-balloon-keeper.tar.gz"
+      expected="$(curl --fail --silent --show-error https://github.com/trevorswanson/libvirt-balloon-keeper/releases/latest/download/libvirt-balloon-keeper.tar.gz.sha256 | awk '{print $1}')"
+      actual="$(sha256sum "$archive" | awk '{print $1}')"
+      [ -n "$expected" ] && [ "$actual" = "$expected" ] || { echo "Package checksum verification failed" >&2; exit 1; }
+      rm -rf /tmp/libvirt-balloon-keeper-release
+      mkdir -p /tmp/libvirt-balloon-keeper-release
+      tar -xzf "$archive" --strip-components=1 -C /tmp/libvirt-balloon-keeper-release
+      PLUGIN_SOURCE=/tmp/libvirt-balloon-keeper-release \
+        PLUGIN_ROOT=/boot/config/plugins/libvirt-balloon-keeper \
+        EMHTTP_ROOT=/usr/local/emhttp/plugins/libvirt-balloon-keeper \
+        bash /tmp/libvirt-balloon-keeper-release/unraid/lifecycle.sh install
+      rm -rf /tmp/libvirt-balloon-keeper-release "$archive"
+    ]]>
+  </INSTALL>
+  <REMOVE plugin="&name;">
+    <![CDATA[
+      if [ -x /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh ]; then
+        bash /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh uninstall || true
+      fi
+    ]]>
+  </REMOVE>
+</PLUGIN>

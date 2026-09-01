@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Containers>
+  <Plugin>True</Plugin>
+  <PluginURL>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg</PluginURL>
+  <PluginAuthor>Trevor Swanson</PluginAuthor>
+  <Beta>False</Beta>
+  <Category>Tools:Utilities</Category>
+  <Name>Libvirt Balloon Keeper</Name>
+  <CA>Addon</CA>
+  <Description>
+    A conservative, dry-run-first controller for libvirt/QEMU virtio-balloon memory on Unraid. It exposes native Dynamix settings, requires fresh telemetry, enforces minimum and maximum targets, records decisions, and fails closed when telemetry is unavailable.
+  </Description>
+  <Date>2026-09-01</Date>
+  <Support>https://github.com/trevorswanson/libvirt-balloon-keeper/issues</Support>
+  <Icon>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.png</Icon>
+</Containers>
