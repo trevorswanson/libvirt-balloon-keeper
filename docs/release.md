@@ -32,11 +32,11 @@ mode.
 
 ## Community Applications submission files
 
-The submission metadata lives under `unraid/`:
+The submission metadata lives in CA-standard locations:
 
-- `libvirt-balloon-keeper.xml` — plugin catalog entry;
-- `ca_profile.xml` — maintainer profile;
-- `libvirt-balloon-keeper.plg` — checksum-verifying installer wrapper.
+- `plugins/libvirt-balloon-keeper.xml` — plugin catalog entry;
+- `ca_profile.xml` — maintainer profile at repository root;
+- `unraid/libvirt-balloon-keeper.plg` — checksum-verifying installer wrapper.
 
 The XML entry is intended for submission to the Community Applications
 repository after a public support thread or equivalent support destination has
