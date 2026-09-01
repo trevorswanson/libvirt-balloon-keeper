@@ -152,6 +152,9 @@ sha256sum -c dist/libvirt-balloon-keeper-0.1.0.tar.gz.sha256
 - Deployed configuration, state, logs, local virtualenvs, and test caches are ignored.
 - Do not commit VM names, hosts, SSH configuration, IPs, credentials, or telemetry dumps from a real machine.
 
+For release, branch, and Community Applications submission workflow, see
+[docs/release.md](docs/release.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

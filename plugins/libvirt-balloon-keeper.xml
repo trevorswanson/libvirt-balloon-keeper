@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Plugin>
+  <Name>Libvirt Balloon Keeper</Name>
+  <Overview>A conservative, dry-run-first controller for libvirt/QEMU virtio-balloon memory on Unraid. It uses native Markdown to display settings pages, requires fresh telemetry, enforces minimum and maximum targets, records decisions, and fails closed when telemetry is unavailable.</Overview>
+  <PluginURL>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg</PluginURL>
+  <PluginAuthor>Trevor Swanson</PluginAuthor>
+  <Support>https://github.com/trevorswanson/libvirt-balloon-keeper/issues</Support>
+  <Project>https://github.com/trevorswanson/libvirt-balloon-keeper</Project>
+  <ReadMe>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/README.md</ReadMe>
+  <Category>Tools:Utilities</Category>
+  <Beta>false</Beta>
+  <Icon>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.png</Icon>
+  <License>MIT</License>
+</Plugin>

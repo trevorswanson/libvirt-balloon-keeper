@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate version tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "Unsupported release tag: $TAG" >&2; exit 1 ;;
+          esac
+      - name: Run release validation
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q balloon_keeper.py web_server.py libvirt_balloon_keeper tests
+          bash -n unraid/*.sh
+      - name: Build release package
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${VERSION#v}" bash unraid/build-package.sh dist
+          cp "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz" dist/libvirt-balloon-keeper.tar.gz
+          sha256sum dist/libvirt-balloon-keeper.tar.gz > dist/libvirt-balloon-keeper.tar.gz.sha256
+          sha256sum -c "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz.sha256"
+      - name: Publish GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            "dist/libvirt-balloon-keeper-${TAG#v}.tar.gz" \
+            "dist/libvirt-balloon-keeper-${TAG#v}.tar.gz.sha256" \
+            "dist/libvirt-balloon-keeper.tar.gz" \
+            "dist/libvirt-balloon-keeper.tar.gz.sha256" \
+            --verify-tag "$TAG" \
+            --title "$TAG" \
+            --generate-notes
