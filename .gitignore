@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Deployment-specific files: never publish infrastructure identifiers or state.
+config.toml
+state.json
+*.log
+dist/

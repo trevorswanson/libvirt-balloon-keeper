@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically evaluate libvirt balloon memory policy
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=30s
+AccuracySec=1s
+Persistent=true
+Unit=libvirt-balloon-keeper.service
+
+[Install]
+WantedBy=timers.target

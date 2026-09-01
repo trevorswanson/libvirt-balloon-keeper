@@ -1,0 +1,114 @@
+Menu="Utilities"
+Title="Libvirt Balloon Keeper"
+Icon="libvirt-balloon-keeper.png"
+Type="php"
+---
+<?php $api = '/plugins/libvirt-balloon-keeper/api.php'; ?>
+<form markdown="1" id="balloon_keeper_settings" method="POST">
+<p id="lbk-message"></p>
+<p id="lbk-warning" hidden></p>
+
+_(Virtual machine)_:
+: <select id="lbk-vm"></select>
+
+> Select the virtual machine whose telemetry and controller settings you want to review.
+
+_(Latest status)_:
+: <span id="lbk-decision">-</span>
+
+> The latest controller result: stable, pending increase/decrease, or a recommended/applied change.
+
+_(Power)_:
+: <span id="lbk-power">-</span>
+
+> Power state is reported per virtual machine. Telemetry and swap activity are only available while it is running.
+
+_(Balloon device)_:
+: <span id="lbk-balloon">-</span>
+
+> This is per-VM libvirt configuration, not a host-wide capability. A powered-off VM can still have a virtio-balloon device configured.
+
+_(Guest memory)_:
+: <span id="lbk-memory">-</span>
+
+> Target is the VM’s current balloon target. Usable is the guest-reported readily reclaimable portion; the percentage is usable memory relative to that target.
+
+_(Swap activity)_:
+: <span id="lbk-swap">-</span>
+
+> The delta is cumulative swap-in plus swap-out activity since the previous sample. Zero means no counter increase, or that this is the first sample—not that current swap usage is zero.
+
+_(Management mode)_:
+: <select id="lbk-mode" data-key="mode"><option value="unmanaged">Unmanaged</option><option value="dry-run">Dry-run</option><option value="apply">Apply</option></select>
+
+> Unmanaged saves the VM without controlling it. Dry-run evaluates and records decisions without changing memory. Apply permits live adjustment within the configured limits.
+
+_(Interval (seconds))_:
+: <input type="number" class="narrow" min="1" id="lbk-interval" data-key="interval_seconds">
+
+> How often the controller samples this virtual machine.
+
+_(Minimum (MiB))_:
+: <input type="number" class="narrow" min="1" id="lbk-min" data-key="min_kib">
+
+> The lowest target memory the controller is allowed to request.
+
+_(Maximum (MiB))_:
+: <input type="number" class="narrow" min="1" id="lbk-max" data-key="max_kib">
+
+> The highest target memory the controller is allowed to request.
+
+_(Step (MiB))_:
+: <input type="number" class="narrow" min="1" id="lbk-step" data-key="step_kib">
+
+> The amount of memory proposed for each grow or shrink action.
+
+_(Grow below (% free))_:
+: <input type="number" class="narrow" min="1" id="lbk-low" data-key="low_usable_percent">
+
+> Usable memory as a percentage of the current balloon target at or below which a pressure sample is counted toward a grow action.
+
+_(Shrink above (% free))_:
+: <input type="number" class="narrow" min="1" id="lbk-high" data-key="high_usable_percent">
+
+> Usable memory as a percentage of the current balloon target at or above which a headroom sample is counted toward a shrink action.
+
+_(Grow samples)_:
+: <input type="number" class="narrow" min="1" id="lbk-grow" data-key="grow_samples">
+
+> Consecutive pressure samples required before growing the virtual machine.
+
+_(Shrink samples)_:
+: <input type="number" class="narrow" min="1" id="lbk-shrink" data-key="shrink_samples">
+
+> Consecutive headroom samples required before shrinking the virtual machine.
+
+<input type="button" id="lbk-save" value="_(Apply)_">
+<input type="button" id="lbk-refresh" value="_(Refresh)_">
+<p>_(Discovered shut-off VMs are shown for review but are never enabled automatically. Live mode requires confirmation.)_</p>
+</form>
+<script>
+(function(){
+  const api=<?=json_encode($api,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)?>;
+  const csrf=<?=json_encode(isset($var['csrf_token'])?$var['csrf_token']:'',JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT)?> || window.csrf_token || '';
+  const message=document.getElementById('lbk-message'), selector=document.getElementById('lbk-vm');
+  let payload=null, selected=null;
+  const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const mib=k=>Math.round((Number(k)||0)/1024), gib=k=>(Number(k)/(1024*1024)).toFixed(1),fmtSwap=k=>{k=Number(k);if(!Number.isFinite(k))return '-';if(k>=2*1024*1024)return (k/(1024*1024)).toFixed(1)+' GiB';if(k>=2*1024)return (k/1024).toFixed(1)+' MiB';return Math.round(k)+' KiB';};
+  function req(route,opt){opt=opt||{};if(!opt.method||opt.method==='GET')opt.cache='no-store';if(opt.method==='POST'&&csrf)opt.headers=Object.assign({},opt.headers||{},{'X-CSRF-Token':csrf});return fetch(api+'?route='+encodeURIComponent(route),opt).then(r=>{if(!r.ok)throw Error('API returned HTTP '+r.status);return r;});}
+  function control(key){return document.querySelector('[data-key="'+key+'"]');}
+  function setText(id,value){const el=document.getElementById(id);if(el)el.textContent=value==null||value===''?'-':String(value);}
+  function hideElement(el,hidden){if(!el)return;el.hidden=hidden;if(hidden)el.style.setProperty('display','none','important');else el.style.removeProperty('display');}
+  function hideHelpAfter(row,hidden){const next=row&&row.nextElementSibling;if(next&&(next.classList.contains('inline_help')||next.querySelector('blockquote.inline_help')))hideElement(next,hidden);}
+  function setHidden(id,hidden){const el=document.getElementById(id);if(!el)return;const dl=el.closest('dl');if(dl){hideElement(dl,hidden);hideHelpAfter(dl,hidden);return;}const tr=el.closest('tr');if(tr){hideElement(tr,hidden);hideHelpAfter(tr,hidden);return;}const dd=el.closest('dd');if(dd){hideElement(dd,hidden);if(dd.previousElementSibling&&dd.previousElementSibling.tagName==='DT')hideElement(dd.previousElementSibling,hidden);return;}hideElement(el.parentElement,hidden);}
+  function sync(markConfigured){if(!selected)return;const mode=control('mode').value;selected.enabled=mode!=='unmanaged';selected.dry_run=mode==='dry-run';if(markConfigured)selected.configured=true;['interval_seconds','min_kib','max_kib','step_kib','low_usable_percent','high_usable_percent','grow_samples','shrink_samples'].forEach(key=>{let value=Number(control(key).value);if(key.endsWith('_kib'))value*=1024;selected[key]=value;});}
+
+  function show(vm){selected=vm;control('mode').value=vm.enabled?(vm.dry_run?'dry-run':'apply'):'unmanaged';[['interval_seconds','interval'],['min_kib','min'],['max_kib','max'],['step_kib','step'],['low_usable_percent','low'],['high_usable_percent','high'],['grow_samples','grow'],['shrink_samples','shrink']].forEach(([key,id])=>control(key).value=key.endsWith('_kib')?mib(vm[key]):vm[key]);const t=vm.telemetry,off=['shut off','shutoff','off'].includes(vm.power_state),pct=t&&t.actual_kib?100*t.usable_kib/t.actual_kib:null;setText('lbk-decision',vm.last_result||'No controller result yet');setText('lbk-power',off?'Off':vm.power_state||(vm.error==='domain not found'?'Unavailable':'Unknown'));setText('lbk-balloon',vm.virtio_balloon===true?(off?'virtio-balloon configured':'virtio-balloon detected'):vm.virtio_balloon===false?'No virtio-balloon configured':'Capability unknown');setText('lbk-memory',off?'':t?'Target '+gib(t.actual_kib)+' GiB · usable '+gib(t.usable_kib)+' GiB ('+(pct==null?'?':pct.toFixed(1))+'% free)':'Unavailable');setText('lbk-swap',off?'':t?'Delta '+(vm.swap_delta_kib==null?'not available yet':fmtSwap(vm.swap_delta_kib))+' · cumulative in/out '+fmtSwap(t.swap_in_kib)+' / '+fmtSwap(t.swap_out_kib):'Unavailable');const warning=!off&&(vm.error||(!vm.configured?'Discovered VM — Apply to save it':''));setText('lbk-warning',warning);const warningEl=document.getElementById('lbk-warning');hideElement(warningEl,!warning);['lbk-memory','lbk-swap'].forEach(id=>setHidden(id,off));['interval_seconds','min_kib','max_kib','step_kib','low_usable_percent','high_usable_percent','grow_samples','shrink_samples'].forEach(key=>setHidden('lbk-'+({interval_seconds:'interval',min_kib:'min',max_kib:'max',step_kib:'step',low_usable_percent:'low',high_usable_percent:'high',grow_samples:'grow',shrink_samples:'shrink'}[key]||key),!vm.enabled));}
+  function load(){req('inventory').then(r=>r.json()).then(x=>{payload=x;selector.innerHTML=x.vms.map(v=>'<option value="'+esc(v.domain)+'">'+esc(v.id===v.domain?v.id:v.id+' ('+v.domain+')')+'</option>').join('');selector.value=selected&&x.vms.some(v=>v.domain===selected.domain)?selected.domain:x.vms[0]?.domain||'';show(x.vms.find(v=>v.domain===selector.value)||{});message.textContent=x.inventory_error||'';}).catch(e=>message.textContent='_(Unable to load inventory:)_ '+e.message);}
+  control('mode').onchange=function(){sync(false);show(selected);};
+  selector.onchange=function(){sync(false);show(payload.vms.find(v=>v.domain===selector.value));};
+  document.getElementById('lbk-refresh').onclick=function(){sync(false);load();};
+  document.getElementById('lbk-save').onclick=function(){sync(true);const draft={version:1,vms:payload.vms.filter(v=>v.configured)};const live=draft.vms.filter(v=>v.enabled&&!v.dry_run).map(v=>v.id);if(live.length&&!confirm('Live mode will permit memory changes for: '+live.join(', ')+'. Continue?'))return;const body=JSON.stringify(draft);req('validate-configuration',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(()=>req('save-configuration',{method:'POST',headers:{'Content-Type':'application/json','X-Confirm':'apply'},body:body})).then(()=>load()).catch(e=>message.textContent='_(Not saved:)_ '+e.message);};
+  load();
+}());
+</script>

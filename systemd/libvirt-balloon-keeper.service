@@ -1,0 +1,11 @@
+[Unit]
+Description=Evaluate libvirt balloon target for one configured VM
+Documentation=https://github.com/trevorswanson/libvirt-balloon-keeper
+Wants=libvirtd.service
+After=libvirtd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/libvirt-balloon-keeper --config /etc/libvirt-balloon-keeper/config.toml
+# The state directory is created during installation.  Keep private VM details
+# out of the repository and journal only policy reasons/target KiB.

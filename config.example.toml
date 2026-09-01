@@ -1,0 +1,25 @@
+version = 1
+
+# Copy this file to the Unraid plugin configuration path and edit locally.
+# Use a physical persistent pool for state/logs; never commit that deployment file.
+
+[defaults]
+min_gib = 4
+max_gib = 16
+step_mib = 512
+low_usable_percent = 20
+high_usable_percent = 60
+grow_samples = 2
+shrink_samples = 20
+cooldown_seconds = 300
+stale_after_seconds = 45
+swap_activity_threshold = 65536
+interval_seconds = 60
+
+[[vms]]
+id = "example-vm"
+domain = "example-vm"
+enabled = true
+dry_run = true
+state_file = "/var/lib/libvirt-balloon-keeper/example-vm/state.json"
+decision_log = "/var/log/libvirt-balloon-keeper/example-vm/decisions.jsonl"
