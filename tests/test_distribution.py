@@ -56,7 +56,7 @@ class DistributionMetadataTests(unittest.TestCase):
     def test_release_workflow_is_tag_driven_and_publishes_stable_assets(self):
         text = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn("tags:", text)
-        self.assertIn("'????.??.??'", text)
+        self.assertIn("'*'", text)
         self.assertIn("actions/checkout@v4", text)
         self.assertIn("gh release create", text)
         self.assertIn("--verify-tag", text)
