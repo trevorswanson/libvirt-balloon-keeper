@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE PLUGIN [
   <!ENTITY name "libvirt-balloon-keeper">
-  <!ENTITY version "latest">
+  <!ENTITY version "2026.09.01">
   <!ENTITY author "Trevor Swanson">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
