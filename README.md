@@ -142,8 +142,8 @@ bash -n unraid/*.sh
 Build a deterministic transfer bundle (the output is ignored by Git):
 
 ```bash
-VERSION=0.1.0 bash unraid/build-package.sh
-sha256sum -c dist/libvirt-balloon-keeper-0.1.0.tar.gz.sha256
+VERSION=2026.09.01 bash unraid/build-package.sh
+sha256sum -c dist/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
 ```
 
 ## Repository hygiene
@@ -152,7 +152,8 @@ sha256sum -c dist/libvirt-balloon-keeper-0.1.0.tar.gz.sha256
 - Deployed configuration, state, logs, local virtualenvs, and test caches are ignored.
 - Do not commit VM names, hosts, SSH configuration, IPs, credentials, or telemetry dumps from a real machine.
 
-For release, branch, and Community Applications submission workflow, see
+For contribution rules and Git Flow, see [CONTRIBUTING.md](CONTRIBUTING.md).
+For release and Community Applications submission workflow, see
 [docs/release.md](docs/release.md).
 
 ## License
