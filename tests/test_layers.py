@@ -1,11 +1,12 @@
 import json
+import stat
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from libvirt_balloon_keeper.adapter import LibvirtError, VirshAdapter
-from libvirt_balloon_keeper.config import load_config, migrate_legacy_config
+from libvirt_balloon_keeper.config import atomic_write_text, last_good_path, load_config, migrate_legacy_config, recover_config
 from libvirt_balloon_keeper.core import KIB_PER_GIB, State, Telemetry
 from libvirt_balloon_keeper.runtime import load_state, run_schedule, run_vm_tick, save_state
 
@@ -79,6 +80,7 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(vm.dry_run)
             self.assertEqual(vm.policy.step_kib, 256 * 1024)
             self.assertEqual(vm.state_file, Path("/pool/state.json"))
+            self.assertEqual(load_config(last_good_path(destination)).vms[0].domain, "example-vm")
             self.assertFalse(migrate_legacy_config(source, destination))
             self.assertEqual(destination.stat().st_mode & 0o777, 0o640)
 
@@ -119,6 +121,44 @@ class ConfigTests(unittest.TestCase):
                 path = Path(d) / "bad.toml"
                 path.write_text(text)
                 with self.assertRaises(ValueError): load_config(path)
+
+
+    def test_last_good_snapshot_and_explicit_recovery(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.toml"
+            original = 'version=1\n[[vms]]\nid="original"\ndomain="original"\nstate_file="/tmp/state"\ndecision_log="/tmp/log"\n'
+            replacement = original.replace("original", "replacement")
+            path.write_text(original)
+            atomic_write_text(path, replacement)
+            self.assertFalse(last_good_path(path).exists())
+
+            from libvirt_balloon_keeper.web import atomic_write_config
+            atomic_write_config(path, original)
+            self.assertEqual(load_config(last_good_path(path)).vms[0].id, "replacement")
+            path.write_text("version=1\n")
+            self.assertEqual(recover_config(path).vms[0].id, "replacement")
+            self.assertEqual(load_config(path).vms[0].id, "replacement")
+            with self.assertRaisesRegex(ValueError, "current configuration is valid"):
+                recover_config(path)
+
+    def test_invalid_atomic_config_write_preserves_live_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.toml"
+            original = 'version=1\n[[vms]]\nid="vm"\ndomain="vm"\nstate_file="/tmp/state"\ndecision_log="/tmp/log"\n'
+            path.write_text(original)
+            from libvirt_balloon_keeper.web import atomic_write_config
+            with self.assertRaises(ValueError): atomic_write_config(path, "version=1\n")
+            self.assertEqual(path.read_text(), original)
+
+    def test_atomic_config_write_preserves_existing_permissions(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "config.toml"
+            original = 'version=1\n[[vms]]\nid="vm"\ndomain="vm"\nstate_file="/tmp/state"\ndecision_log="/tmp/log"\n'
+            path.write_text(original)
+            path.chmod(0o600)
+            from libvirt_balloon_keeper.web import atomic_write_config
+            atomic_write_config(path, original)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
 
 class AdapterTests(unittest.TestCase):

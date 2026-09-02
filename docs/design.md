@@ -69,6 +69,7 @@ allows guest reclaim and balloon accounting to settle before the next decision.
 | Overlapping timer invocation | Hold target |
 | `virsh setmem` failure | Hold target, append the failed request to the audit log, preserve the prior cooldown, and retry only on a later tick |
 | Service/timer stopped | Target remains unchanged |
+| Malformed or incomplete configuration | Refuse startup or execution; retain the last-good snapshot and require explicit recovery |
 
 There is intentionally no host-pressure “emergency reclaim” path in version
 one. Reclaiming memory from a guest during host stress is the least forgiving
@@ -101,7 +102,11 @@ legacy single-domain file. `adapter` bounds `virsh` calls and verifies a live
 mutation by reading the target back. `runtime` owns per-VM locks, atomic state,
 audit records, and failure isolation. `unraid` describes persistent storage and
 safe lifecycle actions. `web` is loopback-only and validates configuration before
-an explicit, atomic save confirmation. It also exposes a bounded `/api/audit?vm=<id>&limit=<1..100>` view and projects each VM's durable `last_success_epoch` and `last_result` heartbeat.
+an explicit, atomic save confirmation. Validated saves preserve the previous
+configuration in a restricted `.last-good` sidecar; malformed active files
+remain fatal and can be restored only through the explicit recovery action. It
+also exposes a bounded `/api/audit?vm=<id>&limit=<1..100>` view and projects
+each VM's durable `last_success_epoch` and `last_result` heartbeat.
 
 Health helpers classify durable state without exposing paths: missing or malformed
 pool-backed state is actionable `error`, an absent/old heartbeat is `stale`, and

@@ -171,11 +171,24 @@ remains `dry_run = true` until deliberately changed.
 
 The reviewed plugin lifecycle entrypoint is `unraid/lifecycle.sh`. It supports
 `install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, `migrate`,
-and `uninstall`.
+`recover`, and `uninstall`.
 `install`/`upgrade` copy the controller and package modules, migrate an existing
 legacy single-domain config once when the plugin config is absent, preserve its
 pool-backed state/audit paths, validate prerequisites, and install the marked cron block.
 The explicit `migrate` action performs only that non-destructive config migration.
+Successful WebGUI saves keep the prior validated configuration in the restricted
+`config.toml.last-good` sidecar. If the active configuration is malformed, do
+not replace it with defaults: inspect the error and run the explicit recovery
+action only after deciding that the saved snapshot is the intended state:
+
+```bash
+/usr/bin/bash /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh check
+/usr/bin/bash /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh recover
+```
+
+Recovery refuses to overwrite a valid active configuration. It restores only a
+validated last-good snapshot and leaves normal startup/scheduling fail-closed
+until the configuration has been repaired or explicitly recovered.
 `stop` removes only that block. `rollback` restores the previous managed
 generation and preserves configuration/state history. `uninstall` stops
 scheduling but intentionally preserves configuration and pool-backed state for

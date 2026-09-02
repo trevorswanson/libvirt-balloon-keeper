@@ -3,9 +3,7 @@ from __future__ import annotations
 
 import html
 import json
-import os
 import re
-import tempfile
 import time
 import tomllib
 from collections import deque
@@ -14,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .adapter import LibvirtError, VirshAdapter
-from .config import AppConfig, VMConfig, load_config
+from .config import AppConfig, VMConfig, atomic_write_text, load_config, load_config_from_text, preserve_last_good_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
 
@@ -221,16 +219,10 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def load_config_from_text(text):
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".toml") as f:
-        f.write(text); f.flush(); return load_config(Path(f.name))
-
-
 def load_config_from_json(raw): return config_from_payload(json.loads(raw.decode("utf-8")))
 
 
 def atomic_write_config(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as f:
-        temporary = Path(f.name); f.write(text); f.flush(); os.fsync(f.fileno())
-    os.chmod(temporary, 0o640); os.replace(temporary, path)
+    load_config_from_text(text)
+    preserve_last_good_config(path)
+    atomic_write_text(path, text)
