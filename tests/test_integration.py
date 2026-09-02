@@ -239,9 +239,12 @@ class WebTests(unittest.TestCase):
         self.assertIn("csrf_token", page)
 
     def test_config_save_requires_confirmation_and_is_atomic(self):
-        updated = CONFIG.replace('id = "example-vm"', 'id = "updated-vm"').replace('domain = "example-vm"', 'domain = "updated-vm"')
+        updated = self.path.read_text().replace('id = "example-vm"', 'id = "updated-vm"').replace('domain = "example-vm"', 'domain = "updated-vm"')
         response = self.request("POST", "/api/config", updated)
         self.assertEqual(response.status, 428)
+        outside = updated.replace(str(Path(self.tmp.name) / "state.json"), "/etc/passwd")
+        response = self.request("POST", "/api/config", outside, {"X-Confirm": "apply"})
+        self.assertEqual(response.status, 400)
         response = self.request("POST", "/api/config", updated, {"X-Confirm": "apply"})
         self.assertEqual(response.status, 200)
         self.assertEqual(load_config(self.path).vms[0].id, "updated-vm")

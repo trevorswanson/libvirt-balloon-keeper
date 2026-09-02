@@ -12,6 +12,14 @@ from typing import Any
 
 from .core import KIB_PER_GIB, PolicyConfig
 
+# Directories the controller may write state and audit files into when a
+# configuration arrives from an untrusted source such as the loopback API.
+DEFAULT_STATE_ROOTS: tuple[Path, ...] = (
+    Path("/var/lib/libvirt-balloon-keeper"),
+    Path("/var/log/libvirt-balloon-keeper"),
+    Path("/mnt/cache/appdata/libvirt-balloon-keeper"),
+)
+
 
 @dataclass(frozen=True)
 class VMConfig:
@@ -90,7 +98,18 @@ def _path(value: Any, name: str) -> Path:
     return path
 
 
-def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> VMConfig:
+def _confined_path(value: Any, name: str, roots: tuple[Path, ...] | None) -> Path:
+    """Like _path, but when roots are given the resolved path must live under one of them."""
+    path = _path(value, name)
+    if roots is None:
+        return path
+    resolved = path.resolve()
+    if not any(resolved.is_relative_to(root.resolve()) for root in roots):
+        raise ValueError(f"{name} must be inside an allowed state directory")
+    return path
+
+
+def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any], state_roots: tuple[Path, ...] | None = None) -> VMConfig:
     merged = {**defaults, **raw}
     identifier_value = merged.get("id", "")
     domain_value = merged.get("domain", "")
@@ -115,8 +134,8 @@ def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> VMConfig:
         domain=domain,
         policy=_policy(merged),
         dry_run=_bool(dry_run, f"vm[{index}].dry_run"),
-        state_file=_path(merged.get("state_file", runtime.get("state_file", f"/var/lib/libvirt-balloon-keeper/{identifier}/state.json")), f"vm[{index}].state_file"),
-        decision_log=_path(merged.get("decision_log", runtime.get("decision_log", f"/var/log/libvirt-balloon-keeper/{identifier}/decisions.jsonl")), f"vm[{index}].decision_log"),
+        state_file=_confined_path(merged.get("state_file", runtime.get("state_file", f"/var/lib/libvirt-balloon-keeper/{identifier}/state.json")), f"vm[{index}].state_file", state_roots),
+        decision_log=_confined_path(merged.get("decision_log", runtime.get("decision_log", f"/var/log/libvirt-balloon-keeper/{identifier}/decisions.jsonl")), f"vm[{index}].decision_log", state_roots),
         interval_seconds=_int(merged, "interval_seconds", 60),
         enabled=_bool(enabled, f"vm[{index}].enabled"),
     )
@@ -189,7 +208,8 @@ decision_log = {log}
     return True
 
 
-def load_config(path: Path) -> AppConfig:
+def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppConfig:
+    """Load a configuration; with state_roots, every VM state/audit path must resolve under one of them."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as exc:
@@ -206,7 +226,7 @@ def load_config(path: Path) -> AppConfig:
     defaults = data.get("defaults", {})
     if not isinstance(defaults, dict):
         raise ValueError("defaults must be a table")
-    vms = tuple(_vm(item, index, defaults) for index, item in enumerate(raw_vms) if isinstance(item, dict))
+    vms = tuple(_vm(item, index, defaults, state_roots) for index, item in enumerate(raw_vms) if isinstance(item, dict))
     if len(vms) != len(raw_vms):
         raise ValueError("each VM entry must be a table")
     ids = [vm.id for vm in vms]
