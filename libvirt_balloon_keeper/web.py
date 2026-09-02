@@ -235,7 +235,9 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
                 except (UnicodeDecodeError, ValueError, tomllib.TOMLDecodeError): self.send_error(400, "invalid configuration"); return
                 self._send(200, b'{"valid": true}'); return
             if route == "/api/validate-configuration":
-                try: load_config_from_json(raw)
+                try:
+                    text = load_config_from_json(raw)
+                    load_config_from_text(text, state_roots)
                 except (UnicodeDecodeError, ValueError, json.JSONDecodeError): self.send_error(400, "invalid configuration"); return
                 self._send(200, b'{"valid": true}'); return
             if route == "/api/config":

@@ -19,6 +19,10 @@ DEFAULT_STATE_ROOTS: tuple[Path, ...] = (
     Path("/var/log/libvirt-balloon-keeper"),
     Path("/mnt/cache/appdata/libvirt-balloon-keeper"),
 )
+MAX_VMS = 128
+MAX_NAME_LENGTH = 128
+MAX_INTERVAL_SECONDS = 7 * 24 * 60 * 60
+MAX_SAMPLE_COUNT = 1000
 
 
 @dataclass(frozen=True)
@@ -85,6 +89,12 @@ def validate_policy(policy: PolicyConfig) -> None:
     for name in ("grow_samples", "shrink_samples", "cooldown_seconds", "stale_after_seconds", "swap_activity_threshold"):
         if getattr(policy, name) <= 0:
             raise ValueError(f"{name} must be positive")
+    if policy.grow_samples > MAX_SAMPLE_COUNT or policy.shrink_samples > MAX_SAMPLE_COUNT:
+        raise ValueError("sample counts are too large")
+    if policy.cooldown_seconds > MAX_INTERVAL_SECONDS or policy.stale_after_seconds > MAX_INTERVAL_SECONDS:
+        raise ValueError("timing values are too large")
+    if policy.swap_activity_threshold > 2**63:
+        raise ValueError("swap_activity_threshold is too large")
 
 
 def _path(value: Any, name: str) -> Path:
@@ -119,6 +129,8 @@ def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any], state_roots: 
     domain = domain_value.strip()
     if not identifier or not domain:
         raise ValueError(f"vm[{index}] requires non-empty id and domain")
+    if len(identifier) > MAX_NAME_LENGTH or len(domain) > MAX_NAME_LENGTH:
+        raise ValueError(f"vm[{index}] id and domain are too long")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", identifier):
         raise ValueError(f"vm[{index}] id contains invalid characters")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+", domain):
@@ -223,6 +235,8 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
         raw_vms = [{"id": str(data.get("domain", "")).strip(), "domain": data.get("domain", ""), **data.get("policy", {}), **data.get("runtime", {})}]
     if not isinstance(raw_vms, list) or not raw_vms:
         raise ValueError("configuration requires at least one VM")
+    if len(raw_vms) > MAX_VMS:
+        raise ValueError(f"configuration supports at most {MAX_VMS} VMs")
     defaults = data.get("defaults", {})
     if not isinstance(defaults, dict):
         raise ValueError("defaults must be a table")
@@ -235,7 +249,7 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
         raise ValueError("VM ids must be unique")
     if len(set(domains)) != len(domains):
         raise ValueError("libvirt domains must be unique")
-    if any(vm.interval_seconds <= 0 for vm in vms):
-        raise ValueError("interval_seconds must be positive")
+    if any(vm.interval_seconds <= 0 or vm.interval_seconds > MAX_INTERVAL_SECONDS for vm in vms):
+        raise ValueError(f"interval_seconds must be between 1 and {MAX_INTERVAL_SECONDS}")
     pool_root = data.get("pool_root")
     return AppConfig(version=version, vms=vms, pool_root=_path(pool_root, "pool_root") if pool_root is not None else None)

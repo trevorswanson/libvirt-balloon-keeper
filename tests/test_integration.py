@@ -174,6 +174,8 @@ class WebTests(unittest.TestCase):
     def test_structured_configuration_requires_confirmation_and_round_trips(self):
         response = self.request("POST", "/api/validate-configuration", json.dumps({"version": 1, "vms": []}), {"Content-Type": "application/json"})
         self.assertEqual(response.status, 400)
+        response = self.request("POST", "/api/validate-configuration", json.dumps({"version": 1, "vms": [{"id": "bad", "domain": "bad", "interval_seconds": 0, "state_file": "/etc/passwd", "decision_log": "/tmp/log"}]}), {"Content-Type": "application/json"})
+        self.assertEqual(response.status, 400)
         body = json.loads(self.request("GET", "/api/inventory").read())
         vm = body["vms"][0]
         response = self.request("POST", "/api/configuration", json.dumps({"version": 1, "vms": [vm]}), {"Content-Type": "application/json"})
@@ -269,7 +271,7 @@ class WebTests(unittest.TestCase):
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
-        self.assertIn("<SHA256>edf64cd52af4a48fcc6efec53c37329161f8f545372553b711a9616da3d5062f</SHA256>", manifest)
+        self.assertIn("<SHA256>d8cc0253433014e5678937deb49bbb7a0cebfcb8d7894d6ba7d0c283ae154646</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)
 
