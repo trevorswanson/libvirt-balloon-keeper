@@ -24,6 +24,9 @@ class DistributionMetadataTests(unittest.TestCase):
         self.assertIn("/issues", support)
         self.assertIn("trevorswanson/libvirt-balloon-keeper", project)
         self.assertTrue(overview.strip())
+        self.assertIn("loopback HTTP API on port 8765", overview)
+        self.assertIn("once-per-minute cron check", overview)
+        self.assertIn("persistent appdata directory", overview)
         self.assertTrue(icon.endswith("libvirt-balloon-keeper.png"))
 
     def test_community_application_profile_is_well_formed(self):
