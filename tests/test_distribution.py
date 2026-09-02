@@ -20,7 +20,10 @@ class DistributionMetadataTests(unittest.TestCase):
         icon = root.findtext("Icon") or ""
         self.assertEqual(root.tag, "Plugin")
         self.assertEqual(root.findtext("Name"), "Libvirt Balloon Keeper")
-        self.assertIn("trevorswanson/libvirt-balloon-keeper/main", plugin_url)
+        self.assertRegex(plugin_url, r"trevorswanson/libvirt-balloon-keeper/[0-9a-f]{40}/unraid/libvirt-balloon-keeper\.plg$")
+        self.assertNotIn("/main/", plugin_url)
+        self.assertNotIn("/main/", root.findtext("ReadMe") or "")
+        self.assertNotIn("/main/", icon)
         self.assertIn("/issues", support)
         self.assertIn("trevorswanson/libvirt-balloon-keeper", project)
         self.assertTrue(overview.strip())
