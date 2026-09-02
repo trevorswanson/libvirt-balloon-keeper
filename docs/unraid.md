@@ -172,9 +172,11 @@ remains `dry_run = true` until deliberately changed.
 The reviewed plugin lifecycle entrypoint is `unraid/lifecycle.sh`. It supports
 `install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, `migrate`,
 and `uninstall`.
-`install`/`upgrade` copy the controller and package modules, migrate an existing
-legacy single-domain config once when the plugin config is absent, preserve its
-pool-backed state/audit paths, validate prerequisites, and install the marked cron block.
+`install`/`upgrade` stop the owned API before replacing startup-loaded code, abort if
+that process does not exit within the bounded timeout, then copy the controller and
+package modules, migrate an existing legacy single-domain config once when the plugin
+config is absent, preserve its pool-backed state/audit paths, validate prerequisites,
+and install the marked cron block.
 The explicit `migrate` action performs only that non-destructive config migration.
 `stop` removes only that block. `rollback` restores the previous managed
 generation and preserves configuration/state history. `uninstall` stops
