@@ -10,6 +10,8 @@ CRON_FRAGMENT="${ROOT}/libvirt-balloon-keeper.cron"
 UPDATE_CRON="${UPDATE_CRON:-/usr/local/sbin/update_cron}"
 API_RUNNER="${ROOT}/run-api.sh"
 API_PID_FILE="${API_PID_FILE:-/var/run/libvirt-balloon-keeper-api.pid}"
+API_SOCKET="${API_SOCKET:-/var/run/libvirt-balloon-keeper-api.sock}"
+[[ "$API_SOCKET" = /* ]] || { printf 'invalid API socket\n' >&2; exit 64; }
 EMHTTP_ROOT="${EMHTTP_ROOT:-/usr/local/emhttp/plugins/libvirt-balloon-keeper}"
 LEGACY_ROOT="${LEGACY_ROOT:-/boot/config/custom/libvirt-balloon-keeper}"
 LEGACY_CONFIG="${LEGACY_ROOT}/config.toml"
@@ -101,7 +103,7 @@ stop_api() {
 }
 
 start_api() {
-    API_PID_FILE="$API_PID_FILE" "$API_RUNNER"
+    API_PID_FILE="$API_PID_FILE" API_SOCKET="$API_SOCKET" "$API_RUNNER"
 }
 
 case "${1:-}" in
@@ -110,7 +112,7 @@ case "${1:-}" in
     start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     restart) stop_api; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     rollback) rollback ;;
-    stop) stop_api; rm -f "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
+    stop) stop_api; rm -f "$API_SOCKET" "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
     check) check ;;
     uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
     *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|uninstall}\n' "$0" >&2; exit 64 ;;

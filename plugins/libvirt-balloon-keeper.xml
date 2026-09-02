@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Plugin>
   <Name>Libvirt Balloon Keeper</Name>
-  <Overview>A conservative, dry-run-first controller for libvirt/QEMU virtio-balloon memory on Unraid. It uses native Markdown to display settings pages, requires fresh telemetry, enforces minimum and maximum targets, records decisions, and fails closed when telemetry is unavailable. The plugin manages a root-owned loopback HTTP API on port 8765, runs a once-per-minute cron check, and stores state and audit logs under the configured persistent appdata directory.</Overview>
+  <Overview>A conservative, dry-run-first controller for libvirt/QEMU virtio-balloon memory on Unraid. It uses native Markdown to display settings pages, requires fresh telemetry, enforces minimum and maximum targets, records decisions, and fails closed when telemetry is unavailable. The plugin manages a root-owned HTTP API on a mode-restricted Unix socket, runs a once-per-minute cron check, and stores state and audit logs under the configured persistent appdata directory.</Overview>
   <PluginURL>https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg</PluginURL>
   <PluginAuthor>Trevor Swanson</PluginAuthor>
   <Support>https://github.com/trevorswanson/libvirt-balloon-keeper/issues</Support>

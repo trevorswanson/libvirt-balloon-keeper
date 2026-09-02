@@ -138,19 +138,19 @@ Never put the state or decision log on `/boot`: frequent writes are needless
 USB wear and make diagnostics hostage to a little flash drive. Grim way to lose
 an autoscaler.
 
-The plugin lifecycle also owns a loopback-only API daemon on
-`127.0.0.1:8765`. `start`/`restart` create it through `run-api.sh`, using
+The plugin lifecycle also owns an API daemon on the mode-restricted Unix socket
+`/var/run/libvirt-balloon-keeper-api.sock`. `start`/`restart` create it through `run-api.sh`, using
 `/var/run/libvirt-balloon-keeper-api.pid` and a bounded log file; `stop` and
-`uninstall` terminate only the PID recorded there. The dedicated
+`uninstall` terminate only the PID recorded there and remove the socket. The dedicated
 `libvirt-balloon-keeper.page` appears under User Utilities, reads
 status/configuration, and validates before saving through this API. The page never executes shell commands or writes the
 TOML file directly. Browser JavaScript uses the same-origin
 `/plugins/libvirt-balloon-keeper/api.php` bridge, which allowlists the API
-routes and forwards them server-side to loopback; browser `127.0.0.1` would
-refer to the operator’s workstation, not the Unraid host.
+routes and forwards them server-side through the Unix socket.
 
-The API runner defaults to port `8765`; `API_PORT` is an environment override
-for isolated tests only. It still always binds the daemon to `127.0.0.1`.
+The API runner defaults to `/var/run/libvirt-balloon-keeper-api.sock`; `API_SOCKET`
+is an environment override for isolated tests and temporary installations. The
+socket is created with mode `0600` and removed during a managed stop.
 
 The controller tick invokes the layered scheduler with the explicit Unraid
 notifier path. Notifications use argv-only execution, cap titles/details, and
@@ -197,7 +197,7 @@ does not assume or create a particular cache-pool mount. Then perform, in order:
 3. run one manual tick and inspect the audit record;
 4. run `start` twice and verify exactly one cron block;
 5. verify the Settings → User Utilities → Libvirt Balloon Keeper page and its same-origin
-   status/configuration bridge; confirm the daemon binds only to loopback;
+   status/configuration bridge; confirm the daemon uses the mode-restricted socket;
 6. reboot during the planned Unraid update and verify boot recovery;
 7. only then consider a separately approved live-mode canary.
 

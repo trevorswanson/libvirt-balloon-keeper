@@ -10,13 +10,27 @@ import time
 import tomllib
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingMixIn, UnixStreamServer
 from pathlib import Path
+from typing import Union
 from urllib.parse import parse_qs, urlparse
 
 from .adapter import LibvirtError, VirshAdapter
 from .config import DEFAULT_STATE_ROOTS, AppConfig, VMConfig, load_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
+
+
+class ThreadingUnixHTTPServer(ThreadingMixIn, UnixStreamServer):
+    """Threaded HTTP server bound to a filesystem socket."""
+
+    daemon_threads = True
+
+    def server_close(self):
+        socket_path = self.server_address
+        super().server_close()
+        path = Path(str(socket_path))
+        if path.is_socket(): path.unlink()
 
 
 def _vm_payload(vm: VMConfig, state=None, telemetry=None, capability=None, error=None) -> dict:
@@ -172,7 +186,8 @@ def state_roots_for(config: AppConfig) -> tuple[Path, ...]:
 
 
 def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None,
-                  state_roots: tuple[Path, ...] | None = None) -> ThreadingHTTPServer:
+                  state_roots: tuple[Path, ...] | None = None,
+                  socket_path: Path | None = None) -> Union[ThreadingHTTPServer, ThreadingUnixHTTPServer]:
     config = load_config(config_path)
     # Anything on the loopback interface can POST a configuration, so the paths
     # it names are confined to the state directories the on-disk config allows.
@@ -231,6 +246,14 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
             except (ValueError, OSError, json.JSONDecodeError): self.send_error(400, "configuration rejected"); return
             self._send(200, b'{"saved": true}')
         def log_message(self, format, *args): return
+    if socket_path is not None:
+        socket_path = Path(socket_path)
+        if not socket_path.is_absolute(): raise ValueError("API socket path must be absolute")
+        if socket_path.exists() and not socket_path.is_socket(): raise ValueError("API socket path is not a socket")
+        if socket_path.exists(): socket_path.unlink()
+        server = ThreadingUnixHTTPServer(str(socket_path), Handler)
+        os.chmod(socket_path, 0o600)
+        return server
     if host not in {"127.0.0.1", "::1", "localhost"}: raise ValueError("status server must bind to loopback")
     return ThreadingHTTPServer((host, port), Handler)
 
