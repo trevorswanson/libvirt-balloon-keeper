@@ -17,6 +17,8 @@ python3 - "$ROOT/libvirt_balloon_keeper" "$WORK/$NAME/libvirt_balloon_keeper" <<
 import shutil
 import sys
 shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+for path in __import__('pathlib').Path(sys.argv[2]).rglob('*'):
+    path.chmod(0o750 if path.is_dir() else 0o640)
 PY
 install -d "$WORK/$NAME/unraid"
 for file in lifecycle.sh install-cron.sh run-api.sh run-once.sh; do

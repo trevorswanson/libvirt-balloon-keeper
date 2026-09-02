@@ -69,6 +69,7 @@ install_files() {
     install -m 0644 "$SOURCE/balloon_keeper.py" "$ROOT/"
     install -m 0644 "$SOURCE/web_server.py" "$ROOT/"
     cp -R "$SOURCE/libvirt_balloon_keeper" "$ROOT/"
+    chmod -R go-w "$ROOT/libvirt_balloon_keeper"
     install -m 0750 "$SOURCE/unraid/run-once.sh" "$WRAPPER"
     install -m 0750 "$SOURCE/unraid/install-cron.sh" "$INSTALLER"
     install -m 0750 "$SOURCE/unraid/run-api.sh" "$API_RUNNER"
@@ -112,7 +113,7 @@ case "${1:-}" in
     start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     restart) stop_api; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     rollback) rollback ;;
-    stop) stop_api; rm -f "$API_SOCKET" "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
+    stop) stop_api; [[ ! -e "$API_SOCKET" || -S "$API_SOCKET" ]] && rm -f "$API_SOCKET"; rm -f "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
     check) check ;;
     uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
     *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|uninstall}\n' "$0" >&2; exit 64 ;;

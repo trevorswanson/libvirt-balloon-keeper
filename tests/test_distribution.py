@@ -48,7 +48,7 @@ class DistributionMetadataTests(unittest.TestCase):
     def test_plugin_installer_is_thin_verified_lifecycle_wrapper(self):
         text = (UNRAID / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("releases/download/&version;/libvirt-balloon-keeper.tar.gz", text)
-        self.assertIn("<SHA256>048cb850c50e9b8caf5d660f466af116569700707238c659e193f3b9bd1a1a10</SHA256>", text)
+        self.assertIn("<SHA256>edf64cd52af4a48fcc6efec53c37329161f8f545372553b711a9616da3d5062f</SHA256>", text)
         self.assertIn("<URL>", text)
         self.assertNotIn("releases/latest", text)
         self.assertNotIn("curl --fail", text)

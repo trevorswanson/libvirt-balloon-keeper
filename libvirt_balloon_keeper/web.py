@@ -228,9 +228,10 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
             if route == "/api/validate":
                 try:
                     if self.headers.get("Content-Type", "").startswith("application/json"):
-                        load_config_from_json(raw)
+                        text = load_config_from_json(raw)
                     else:
-                        import tomllib; tomllib.loads(raw.decode("utf-8"))
+                        text = raw.decode("utf-8")
+                    load_config_from_text(text, state_roots)
                 except (UnicodeDecodeError, ValueError, tomllib.TOMLDecodeError): self.send_error(400, "invalid configuration"); return
                 self._send(200, b'{"valid": true}'); return
             if route == "/api/validate-configuration":
