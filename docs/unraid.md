@@ -69,21 +69,25 @@ unchanged target.
 
 ## Persistent startup hook
 
-The installer adds a marked, once-per-minute root crontab entry. Add one line to
-the existing `/boot/config/go`:
+The legacy compatibility installer adds a marked, once-per-minute root crontab
+entry. Add one line to the existing `/boot/config/go` only when using that
+legacy path:
 
 ```bash
 /usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/install-cron.sh
 ```
 
-The installer removes and recreates only its own marked block, so running it
-repeatedly is safe and cannot create duplicate entries. Invoke the wrapper
+The legacy installer removes and recreates only its own marked block, so running
+it repeatedly is safe and cannot create duplicate entries. Invoke the wrapper
 manually for an immediate tick without starting a daemon:
 
 ```bash
 /usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/run-libvirt-balloon-keeper-cron.sh
-crontab -l | grep -A2 -B1 libvirt-balloon-keeper
 ```
+
+The managed plugin lifecycle uses Unraid's native
+`/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper.cron`
+fragment and invokes `update_cron`; it does not splice the root crontab.
 
 The wrapper has a non-blocking lock, invokes exactly one controller decision,
 and exits. Cron supplies the retry boundary after failures or process death.
@@ -124,7 +128,9 @@ needed.
 
 1. Stop the runner.
 2. Back up the boot device.
-3. Replace `balloon_keeper.py`, `unraid/run-libvirt-balloon-keeper-cron.sh`, and `unraid/install-cron.sh` in the boot configuration directory from a reviewed release.
+3. Replace the managed plugin from a reviewed release, or replace
+   `balloon_keeper.py`, `unraid/run-libvirt-balloon-keeper-cron.sh`, and
+   `unraid/install-cron.sh` when using the legacy compatibility path.
 4. Run `python3 -m py_compile` and a one-shot tick.
 5. Re-run the installer; keep the existing local `config.toml`, state, and audit log.
 
@@ -183,14 +189,14 @@ rollback or migration review.
 
 The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`; the current
 live compatibility path under `/boot/config/custom` must not be overwritten by
-this preview. Before deployment, review the rendered paths and set `POOL_ROOT`
-to the actual physical cache-pool mount. Then perform, in order:
+this preview. State and audit paths come from the configuration; the lifecycle
+does not assume or create a particular cache-pool mount. Then perform, in order:
 
 1. back up the Unraid boot device;
 2. install with `dry_run = true` and run `check`;
 3. run one manual tick and inspect the audit record;
 4. run `start` twice and verify exactly one cron block;
-5. verify the Tools → Libvirt Balloon Keeper page and its same-origin
+5. verify the Settings → User Utilities → Libvirt Balloon Keeper page and its same-origin
    status/configuration bridge; confirm the daemon binds only to loopback;
 6. reboot during the planned Unraid update and verify boot recovery;
 7. only then consider a separately approved live-mode canary.

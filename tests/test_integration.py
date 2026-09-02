@@ -11,12 +11,35 @@ from libvirt_balloon_keeper.unraid import PluginLayout, cron_entry, lifecycle_ac
 from libvirt_balloon_keeper.web import create_server
 from libvirt_balloon_keeper.adapter import LibvirtError
 from libvirt_balloon_keeper.core import Telemetry
+from libvirt_balloon_keeper.runtime import run_schedule, save_state
+from libvirt_balloon_keeper.core import State
 
 
 CONFIG = '''version = 1\n[[vms]]\nid = "example-vm"\ndomain = "example-vm"\nstate_file = "/tmp/example/state.json"\ndecision_log = "/tmp/example/decisions.jsonl"\n'''
 
 
 class HealthAndUnraidTests(unittest.TestCase):
+    def test_schedule_honours_each_vms_interval(self):
+        with tempfile.TemporaryDirectory() as d:
+            state_path = Path(d) / "state.json"
+            audit_path = Path(d) / "decisions.jsonl"
+            Path(d, "config.toml").write_text(
+                f'''version = 1\n[[vms]]\nid = "vm"\ndomain = "vm"\ninterval_seconds = 60\nstate_file = "{state_path}"\ndecision_log = "{audit_path}"\n'''
+            )
+            config = load_config(Path(d) / "config.toml")
+            save_state(state_path, State(last_success_epoch=100, last_result="hold: stable"))
+            class Adapter:
+                calls = 0
+                def dommemstat(self, domain):
+                    self.calls += 1
+                    return Telemetry(8 * 1024 * 1024, 7 * 1024 * 1024, 2 * 1024 * 1024, 100, 0, 0)
+                def setmem(self, domain, target_kib): raise AssertionError("unexpected mutation")
+            adapter = Adapter()
+            self.assertEqual(run_schedule(config, adapter, now=150)["vm"], "hold: interval not elapsed")
+            self.assertEqual(adapter.calls, 0)
+            self.assertIn("hold:", run_schedule(config, adapter, now=161)["vm"])
+            self.assertEqual(adapter.calls, 1)
+
     def test_health_only_notifies_actionable_states(self):
         class N:
             calls = []
@@ -238,10 +261,20 @@ class WebTests(unittest.TestCase):
         self.assertIn("X-CSRF-Token", page)
         self.assertIn("csrf_token", page)
 
+    def test_manifest_is_immutable_and_integrity_pinned(self):
+        manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
+        self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
+        self.assertIn("<SHA256>d9c3e7bad17538508d490788b9dd8d9bca892aa948f789f8027bbcd24122e2f7</SHA256>", manifest)
+        self.assertNotIn("releases/latest", manifest)
+        self.assertNotIn("curl --fail", manifest)
+
     def test_config_save_requires_confirmation_and_is_atomic(self):
-        updated = CONFIG.replace('id = "example-vm"', 'id = "updated-vm"').replace('domain = "example-vm"', 'domain = "updated-vm"')
+        updated = self.path.read_text().replace('id = "example-vm"', 'id = "updated-vm"').replace('domain = "example-vm"', 'domain = "updated-vm"')
         response = self.request("POST", "/api/config", updated)
         self.assertEqual(response.status, 428)
+        outside = updated.replace(str(Path(self.tmp.name) / "state.json"), "/etc/passwd")
+        response = self.request("POST", "/api/config", outside, {"X-Confirm": "apply"})
+        self.assertEqual(response.status, 400)
         response = self.request("POST", "/api/config", updated, {"X-Confirm": "apply"})
         self.assertEqual(response.status, 200)
         self.assertEqual(load_config(self.path).vms[0].id, "updated-vm")

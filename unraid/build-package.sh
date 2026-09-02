@@ -19,8 +19,8 @@ import sys
 shutil.copytree(sys.argv[1], sys.argv[2], ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
 PY
 install -d "$WORK/$NAME/unraid"
-for file in "$ROOT"/unraid/*.sh; do
-    install -m 0750 "$file" "$WORK/$NAME/unraid/"
+for file in lifecycle.sh install-cron.sh run-api.sh run-once.sh; do
+    install -m 0750 "$ROOT/unraid/$file" "$WORK/$NAME/unraid/"
 done
 install -m 0644 "$ROOT/unraid/api.php" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.png" "$WORK/$NAME/unraid/"
