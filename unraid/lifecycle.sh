@@ -105,6 +105,7 @@ start_api() {
 case "${1:-}" in
     install|upgrade) migrate_legacy; install_files; check; "$INSTALLER"; start_api ;;
     migrate) migrate_legacy ;;
+    recover) /usr/bin/python3 "$ROOT/balloon_keeper.py" --config "$CONFIG" --recover-config ;;
     start) "$INSTALLER"; start_api ;;
     restart) stop_api; "$INSTALLER"; start_api ;;
     rollback) rollback ;;
@@ -116,5 +117,5 @@ for line in sys.stdin:
     if not skip: sys.stdout.write(line)' | crontab - ;;
     check) check ;;
     uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
-    *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|uninstall}\n' "$0" >&2; exit 64 ;;
+    *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|recover|uninstall}\n' "$0" >&2; exit 64 ;;
 esac

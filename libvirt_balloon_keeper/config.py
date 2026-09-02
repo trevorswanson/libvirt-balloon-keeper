@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import stat
 import tempfile
 import tomllib
 from dataclasses import dataclass
@@ -90,6 +91,69 @@ def _path(value: Any, name: str) -> Path:
     return path
 
 
+def last_good_path(path: Path) -> Path:
+    """Return the sidecar containing the last successfully validated config."""
+    return path.with_name(f"{path.name}.last-good")
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    """Replace text atomically with the config file's restricted permissions."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except FileNotFoundError:
+        mode = 0o640
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def preserve_last_good_config(path: Path) -> None:
+    """Snapshot the currently valid config before replacing it."""
+    if not path.exists():
+        return
+    try:
+        load_config(path)
+        text = path.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return
+    snapshot = last_good_path(path)
+    atomic_write_text(snapshot, text)
+
+
+def recover_config(path: Path) -> AppConfig:
+    """Restore the explicit last-good snapshot, refusing valid live config."""
+    try:
+        load_config(path)
+    except (OSError, ValueError):
+        pass
+    else:
+        raise ValueError("current configuration is valid; refusing recovery")
+    snapshot = last_good_path(path)
+    text = snapshot.read_text(encoding="utf-8")
+    config = load_config_from_text(text)
+    atomic_write_text(path, text)
+    return config
+
+
+def load_config_from_text(text: str) -> AppConfig:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".toml") as handle:
+        handle.write(text)
+        handle.flush()
+        return load_config(Path(handle.name))
+
+
 def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any]) -> VMConfig:
     merged = {**defaults, **raw}
     identifier_value = merged.get("id", "")
@@ -172,20 +236,8 @@ decision_log = {log}
         log=json.dumps(str(vm.decision_log)),
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o640)
-        os.replace(temporary, destination)
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
+    atomic_write_text(destination, text)
+    atomic_write_text(last_good_path(destination), text)
     return True
 
 

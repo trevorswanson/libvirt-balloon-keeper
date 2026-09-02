@@ -42,4 +42,4 @@ def cron_entry(wrapper: Path, interval_minutes: int = 1) -> str:
 
 
 def lifecycle_actions() -> tuple[str, ...]:
-    return ("install", "start", "stop", "restart", "upgrade", "rollback", "uninstall", "check", "migrate")
+    return ("install", "start", "stop", "restart", "upgrade", "rollback", "uninstall", "check", "migrate", "recover")

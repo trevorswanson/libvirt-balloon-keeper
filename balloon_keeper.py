@@ -10,6 +10,7 @@ from pathlib import Path
 
 from libvirt_balloon_keeper.adapter import LibvirtError, VirshAdapter
 from libvirt_balloon_keeper.config import VMConfig, load_config as load_app_config
+from libvirt_balloon_keeper.config import recover_config
 from libvirt_balloon_keeper.config import validate_policy
 from libvirt_balloon_keeper.core import KIB_PER_GIB, PolicyConfig, State, Telemetry, decide as _decide
 from libvirt_balloon_keeper.health import UnraidNotifier
@@ -63,11 +64,17 @@ def run_tick(config: Config, virsh: BalloonAdapter, now: float | None = None) ->
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--check-config", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--check-config", action="store_true")
+    mode.add_argument("--recover-config", action="store_true")
     parser.add_argument("--notify-command", type=str, default=None,
                         help="absolute Unraid notify command; enables health alerts")
     args = parser.parse_args()
     try:
+        if args.recover_config:
+            config = recover_config(args.config)
+            print(f"recovered configuration for {len(config.vms)} VM(s)")
+            return 0
         config = load_config(args.config)
         if args.check_config:
             print(f"configuration valid for domain {config.domain!r}; dry_run={config.dry_run}")

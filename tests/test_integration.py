@@ -85,7 +85,7 @@ class HealthAndUnraidTests(unittest.TestCase):
         layout = PluginLayout()
         validate_layout(layout)
         self.assertEqual(cron_entry(Path("/boot/config/plugins/x/run-once.sh")), "* * * * * /usr/bin/bash /boot/config/plugins/x/run-once.sh")
-        self.assertEqual(len(lifecycle_actions()), 9)
+        self.assertEqual(len(lifecycle_actions()), 10)
         with self.assertRaises(ValueError): cron_entry(Path("relative"))
         with self.assertRaises(ValueError): validate_layout(PluginLayout(boot_root=Path("relative")))
 
