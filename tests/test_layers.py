@@ -7,7 +7,7 @@ from unittest.mock import patch
 from libvirt_balloon_keeper.adapter import LibvirtError, VirshAdapter
 from libvirt_balloon_keeper.config import load_config, migrate_legacy_config
 from libvirt_balloon_keeper.core import KIB_PER_GIB, State, Telemetry
-from libvirt_balloon_keeper.runtime import load_state, run_schedule, run_vm_tick, save_state
+from libvirt_balloon_keeper.runtime import append_decision, load_state, run_schedule, run_vm_tick, save_state
 
 
 NOW = 1_800_000_000.0
@@ -120,6 +120,18 @@ class ConfigTests(unittest.TestCase):
                 path.write_text(text)
                 with self.assertRaises(ValueError): load_config(path)
 
+    def test_rejects_pathological_configuration_sizes(self):
+        cases = [
+            'version=1\n[[vms]]\nid="' + ('a' * 129) + '"\ndomain="a"\nstate_file="/tmp/a"\ndecision_log="/tmp/l"\n',
+            'version=1\n[defaults]\ngrow_samples=1001\n[[vms]]\nid="a"\ndomain="a"\nstate_file="/tmp/a"\ndecision_log="/tmp/l"\n',
+            'version=1\n[[vms]]\nid="a"\ndomain="a"\ninterval_seconds=604801\nstate_file="/tmp/a"\ndecision_log="/tmp/l"\n',
+        ]
+        for text in cases:
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as d:
+                path = Path(d) / "large.toml"
+                path.write_text(text)
+                with self.assertRaises(ValueError): load_config(path)
+
 
 class AdapterTests(unittest.TestCase):
     def test_parses_valid_stats_and_rejects_missing(self):
@@ -166,6 +178,16 @@ class AdapterTests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_runtime_rejects_symlinked_state_and_audit_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            target = root / "target"
+            target.mkdir()
+            link = root / "link"
+            link.symlink_to(target, target_is_directory=True)
+            with self.assertRaises(ValueError): save_state(link / "state.json", State())
+            with self.assertRaises(ValueError): append_decision(link / "audit.jsonl", now=1, vm=vm_config(root, "vm"), telemetry=None, target=None, reason="hold")
+
     def test_atomic_state_round_trip_and_schedule_isolates_failures(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
