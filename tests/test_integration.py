@@ -154,7 +154,7 @@ class WebTests(unittest.TestCase):
         self.assertIn("Libvirt Balloon Keeper", response.read().decode())
         response = self.request("GET", "/missing")
         self.assertEqual(response.status, 404)
-        response = self.request("POST", "/api/validate", "version = 1")
+        response = self.request("POST", "/api/validate", self.path.read_text())
         self.assertEqual(response.status, 200)
         response = self.request("POST", "/api/validate", "bad [toml")
         self.assertEqual(response.status, 400)
@@ -246,6 +246,7 @@ class WebTests(unittest.TestCase):
 
         proxy = Path(__file__).parents[1] / "unraid" / "api.php"
         proxy_content = proxy.read_text()
+        self.assertIn("same-origin request required", proxy_content)
         self.assertIn("/var/run/libvirt-balloon-keeper-api.sock", proxy_content)
         self.assertIn("stream_socket_client", proxy_content)
         self.assertIn("X-Confirm: apply", proxy_content)
@@ -268,7 +269,7 @@ class WebTests(unittest.TestCase):
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
-        self.assertIn("<SHA256>048cb850c50e9b8caf5d660f466af116569700707238c659e193f3b9bd1a1a10</SHA256>", manifest)
+        self.assertIn("<SHA256>edf64cd52af4a48fcc6efec53c37329161f8f545372553b711a9616da3d5062f</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)
 
