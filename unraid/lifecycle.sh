@@ -93,6 +93,10 @@ stop_api() {
                 kill -0 "$pid" 2>/dev/null || break
                 sleep 0.02
             done
+            if kill -0 "$pid" 2>/dev/null; then
+                printf 'API process %s did not stop within the timeout\n' "$pid" >&2
+                return 1
+            fi
         fi
         rm -f "$API_PID_FILE"
     fi
@@ -103,7 +107,7 @@ start_api() {
 }
 
 case "${1:-}" in
-    install|upgrade) migrate_legacy; install_files; check; "$INSTALLER"; start_api ;;
+    install|upgrade) stop_api; migrate_legacy; install_files; check; "$INSTALLER"; start_api ;;
     migrate) migrate_legacy ;;
     start) "$INSTALLER"; start_api ;;
     restart) stop_api; "$INSTALLER"; start_api ;;
