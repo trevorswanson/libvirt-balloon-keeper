@@ -48,6 +48,7 @@ jobs:
           sha256sum -c "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz.sha256"
           ACTUAL="$(sha256sum "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz" | cut -d' ' -f1)"
           EXPECTED="$(sed -n 's/.*<SHA256>\([0-9a-f]\{64\}\)<\/SHA256>.*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          printf 'manifest checksum: %s\nbuilt checksum: %s\n' "$EXPECTED" "$ACTUAL"
           test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
           mkdir -p dist
           cp "$RUNNER_TEMP/build-a"/* dist/
