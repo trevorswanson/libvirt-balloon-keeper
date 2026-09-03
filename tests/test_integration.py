@@ -192,6 +192,13 @@ class WebTests(unittest.TestCase):
         self.assertEqual([entry["reason"] for entry in payload["entries"]], ["hold", "grow"])
         response = self.request("GET", "/api/audit?vm=unknown")
         self.assertEqual(response.status, 404)
+
+    def test_audit_reader_skips_oversized_entries(self):
+        audit = Path(self.tmp.name) / "decisions.jsonl"
+        audit.write_text('{"reason":"ok"}\n' + '{"reason":"' + ('x' * 20000) + '"}\n')
+        response = self.request("GET", "/api/audit?vm=example-vm")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(json.loads(response.read())["entries"]), 1)
         response = self.request("GET", "/api/audit?vm=example-vm&limit=101")
         self.assertEqual(response.status, 400)
 

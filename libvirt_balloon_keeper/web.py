@@ -162,10 +162,15 @@ def config_from_payload(payload: dict) -> str:
     return "\n".join(lines)
 
 
+MAX_AUDIT_LINE_BYTES = 16 * 1024
+MAX_RESPONSE_BYTES = 1024 * 1024
+
+
 def read_audit(path: Path, limit: int = 50) -> list[dict]:
     if not 1 <= limit <= 100: raise ValueError("audit limit must be between 1 and 100")
     try:
-        with path.open(encoding="utf-8") as handle: lines = deque(handle, maxlen=limit)
+        with path.open(encoding="utf-8") as handle:
+            lines = deque((line for line in handle if len(line.encode("utf-8")) <= MAX_AUDIT_LINE_BYTES), maxlen=limit)
     except FileNotFoundError: return []
     except OSError as exc: raise ValueError("audit log unavailable") from exc
     entries = []
@@ -196,6 +201,8 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
     config_lock = threading.Lock()
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, content_type="application/json"):
+            if len(body) > MAX_RESPONSE_BYTES:
+                self.send_error(503, "response too large"); return
             self.send_response(status); self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
         def do_GET(self):  # noqa: N802
