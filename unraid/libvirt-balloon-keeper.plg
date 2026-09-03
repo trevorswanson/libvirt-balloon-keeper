@@ -3,7 +3,7 @@
   <!ENTITY name "libvirt-balloon-keeper">
   <!ENTITY version "2026.09.03">
   <!ENTITY author "Trevor Swanson">
-  <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/c8c78ec64480a8d9ea4a9a3dca5bb6a0c1029b54/unraid/libvirt-balloon-keeper.plg">
+  <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
   <CHANGES>
