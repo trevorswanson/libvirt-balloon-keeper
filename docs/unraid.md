@@ -6,15 +6,28 @@ reboot. The generic systemd files in this repository are for conventional
 systemd hosts; this Unraid path uses the persistent boot device and
 `/boot/config/go`.
 
+## Storage
+
+The controller stores only its durable runtime state in the selected storage
+root: per-VM `state.json` files (sample history, cooldowns, and cumulative
+swap counters), per-VM `decisions.jsonl` audit logs, and short-lived lock files.
+The WebGUI prefers `/mnt/cache` only when it is an actual mounted directory;
+otherwise it selects another mounted pool, then `/mnt/user` as a persistent
+share fallback. It never creates a guessed `/mnt/cache` tree. If no persistent
+mount is available, newly discovered VMs cannot be saved until storage exists.
+
+An explicit `pool_root` must be a direct child of `/mnt` and an existing mount;
+the configuration validator rejects ordinary directories and paths elsewhere.
+
 ## Layout
 
 Use three locations with different jobs:
 
 | Location | Contents | Why |
 |---|---|---|
-| `/boot/config/custom/libvirt-balloon-keeper/` | `balloon_keeper.py`, `run-libvirt-balloon-keeper-cron.sh`, `install-cron.sh`, local `config.toml` | Persisted on the Unraid boot device and available during boot. Files are run through `python3`/`bash`; current Unraid boot media does not support executable bits. |
-| `/mnt/<cache-pool>/appdata/libvirt-balloon-keeper/` | `state.json`, `decisions.jsonl` | Persistent write-heavy state on a real cache pool, not on the USB boot device. Choose the actual cache-pool mount, not `/mnt/user`, so a mover operation cannot relocate an active state file. |
-| `/boot/config/go` | one cron installer line | Persisted startup hook. It idempotently recreates the cron entry after every reboot. |
+| `/boot/config/plugins/libvirt-balloon-keeper/` | Managed code, `config.toml`, scheduler fragment, and API runtime files | Persisted on the Unraid boot device and installed by `lifecycle.sh`. |
+| `/mnt/<mounted-pool>/appdata/libvirt-balloon-keeper/` | Per-VM `state.json`, `decisions.jsonl`, and lock files | Persistent write-heavy state on a verified mounted pool (or `/mnt/user` fallback), never a guessed directory. |
+| `/boot/config/go` | host startup integration | Managed by Unraid's plugin lifecycle; do not hand-edit generated cron state. |
 
 The cron wrapper runs one controller tick and exits. If the array/pool or VM is
 not ready, the tick fails closed and cron retries on the next minute; `go` never

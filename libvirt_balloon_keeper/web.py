@@ -20,6 +20,7 @@ from .adapter import LibvirtError, VirshAdapter
 from .config import DEFAULT_STATE_ROOTS, AppConfig, VMConfig, load_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
+from .unraid import discover_storage_root
 
 
 class ThreadingUnixHTTPServer(ThreadingMixIn, UnixStreamServer):
@@ -73,6 +74,8 @@ def status_payload(config: AppConfig, results: dict[str, str] | None = None, ada
 def inventory_payload(config: AppConfig, adapter=None) -> dict:
     adapter = adapter or VirshAdapter()
     configured = {vm.domain: vm for vm in config.vms}
+    storage_root = config.pool_root / "appdata/libvirt-balloon-keeper" if config.pool_root else discover_storage_root()
+    storage_mount = config.pool_root or (storage_root.parent.parent if storage_root else None)
     try:
         domains = adapter.list_domains()
     except LibvirtError as exc:
@@ -87,8 +90,8 @@ def inventory_payload(config: AppConfig, adapter=None) -> dict:
                     "low_usable_percent": 20, "high_usable_percent": 60,
                     "grow_samples": 2, "shrink_samples": 20, "cooldown_seconds": 300,
                     "stale_after_seconds": 45, "swap_activity_threshold": 64 * 1024,
-                    "state_file": f"/mnt/cache/appdata/libvirt-balloon-keeper/{domain}/state.json",
-                    "decision_log": f"/mnt/cache/appdata/libvirt-balloon-keeper/{domain}/decisions.jsonl",
+                    "state_file": str(storage_root / domain / "state.json") if storage_root else "",
+                    "decision_log": str(storage_root / domain / "decisions.jsonl") if storage_root else "",
                     "virtio_balloon": None, "telemetry": None, "power_state": None, "error": None}
         else:
             item = status_payload(AppConfig(config.version, (vm,)))["vms"][0]
@@ -122,7 +125,7 @@ def inventory_payload(config: AppConfig, adapter=None) -> dict:
             item = status_payload(AppConfig(config.version, (vm,)))["vms"][0]
             item["error"] = "domain not found"
             items.append(item)
-    return {"version": config.version, "vms": items, "inventory_error": None}
+    return {"version": config.version, "pool_root": str(storage_mount or ""), "vms": items, "inventory_error": None}
 
 
 def _toml_string(value: str) -> str:
@@ -133,6 +136,10 @@ def config_from_payload(payload: dict) -> str:
     if not isinstance(payload, dict) or not isinstance(payload.get("vms"), list) or not payload["vms"]:
         raise ValueError("configuration requires at least one VM")
     lines = ["version = 1", ""]
+    if payload.get("pool_root"):
+        if not isinstance(payload["pool_root"], str):
+            raise ValueError("pool_root must be a string")
+        lines += [f"pool_root = {_toml_string(payload['pool_root'])}", ""]
     for raw in payload["vms"]:
         if not isinstance(raw, dict):
             raise ValueError("each VM must be an object")

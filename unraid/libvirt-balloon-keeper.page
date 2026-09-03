@@ -108,7 +108,7 @@ _(Shrink samples)_:
   control('mode').onchange=function(){sync(false);show(selected);};
   selector.onchange=function(){sync(false);show(payload.vms.find(v=>v.domain===selector.value));};
   document.getElementById('lbk-refresh').onclick=function(){sync(false);load();};
-  document.getElementById('lbk-save').onclick=function(){sync(true);const draft={version:1,vms:payload.vms.filter(v=>v.configured)};const live=draft.vms.filter(v=>v.enabled&&!v.dry_run).map(v=>v.id);if(live.length&&!confirm('Live mode will permit memory changes for: '+live.join(', ')+'. Continue?'))return;const body=JSON.stringify(draft);req('validate-configuration',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(()=>req('save-configuration',{method:'POST',headers:{'Content-Type':'application/json','X-Confirm':'apply'},body:body})).then(()=>load()).catch(e=>message.textContent='Not saved: '+e.message);};
+  document.getElementById('lbk-save').onclick=function(){sync(true);const draft={version:1,vms:payload.vms.filter(v=>v.configured)};const live=draft.vms.filter(v=>v.enabled&&!v.dry_run).map(v=>v.id);if(live.length&&!confirm('Live mode will permit memory changes for: '+live.join(', ')+'. Continue?'))return;const body=JSON.stringify({version:1,pool_root:payload.pool_root||'',vms:payload.vms.filter(v=>v.configured)});req('validate-configuration',{method:'POST',headers:{'Content-Type':'application/json'},body:body}).then(()=>req('save-configuration',{method:'POST',headers:{'Content-Type':'application/json','X-Confirm':'apply'},body:body})).then(()=>load()).catch(e=>message.textContent='Not saved: '+e.message);};
   load();
 }());
 </script>

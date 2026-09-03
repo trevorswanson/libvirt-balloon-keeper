@@ -252,4 +252,8 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
     if any(vm.interval_seconds <= 0 or vm.interval_seconds > MAX_INTERVAL_SECONDS for vm in vms):
         raise ValueError(f"interval_seconds must be between 1 and {MAX_INTERVAL_SECONDS}")
     pool_root = data.get("pool_root")
-    return AppConfig(version=version, vms=vms, pool_root=_path(pool_root, "pool_root") if pool_root is not None else None)
+    selected_pool = _path(pool_root, "pool_root") if pool_root is not None else None
+    if selected_pool is not None:
+        from .unraid import validate_pool_root
+        validate_pool_root(selected_pool)
+    return AppConfig(version=version, vms=vms, pool_root=selected_pool)
