@@ -68,6 +68,8 @@ class DistributionMetadataTests(unittest.TestCase):
         self.assertIn("actions/checkout@v4", text)
         self.assertIn("gh release create", text)
         self.assertIn("--verify-tag", text)
+        self.assertIn('EXPECTED="$(sed -n', text)
+        self.assertIn('test "$ACTUAL" = "$EXPECTED"', text)
         self.assertNotIn("--verify-tag \"$TAG\"", text)
 
     def test_test_workflow_builds_and_uploads_package(self):
@@ -75,6 +77,7 @@ class DistributionMetadataTests(unittest.TestCase):
         self.assertIn("package:", text)
         self.assertIn("cmp", text)
         self.assertIn("sha256sum -c", text)
+        self.assertIn('test "$ACTUAL" = "$EXPECTED"', text)
         self.assertIn("actions/upload-artifact@v4", text)
 
 

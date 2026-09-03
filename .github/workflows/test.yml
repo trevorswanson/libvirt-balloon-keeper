@@ -40,11 +40,15 @@ jobs:
           python-version: '3.11'
       - name: Build package twice
         run: |
-          VERSION=0.1.0 bash unraid/build-package.sh "$RUNNER_TEMP/build-a"
-          VERSION=0.1.0 bash unraid/build-package.sh "$RUNNER_TEMP/build-b"
-          cmp "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-0.1.0.tar.gz" \
-              "$RUNNER_TEMP/build-b/libvirt-balloon-keeper-0.1.0.tar.gz"
-          sha256sum -c "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-0.1.0.tar.gz.sha256"
+          VERSION="$(sed -n 's/.*<!ENTITY version "\([^"]*\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          VERSION="$VERSION" bash unraid/build-package.sh "$RUNNER_TEMP/build-a"
+          VERSION="$VERSION" bash unraid/build-package.sh "$RUNNER_TEMP/build-b"
+          cmp "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz" \
+              "$RUNNER_TEMP/build-b/libvirt-balloon-keeper-${VERSION}.tar.gz"
+          sha256sum -c "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz.sha256"
+          ACTUAL="$(sha256sum "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz" | cut -d' ' -f1)"
+          EXPECTED="$(sed -n 's/.*<SHA256>\([0-9a-f]\{64\}\)<\/SHA256>.*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
           mkdir -p dist
           cp "$RUNNER_TEMP/build-a"/* dist/
       - name: Inspect package contents
