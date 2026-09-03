@@ -28,8 +28,27 @@ install -m 0644 "$ROOT/unraid/api.php" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.png" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.page" "$WORK/$NAME/unraid/"
 install -d "$OUT"
-tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -cf "$OUT/$NAME.tar" -C "$WORK" "$NAME"
-gzip -n -f "$OUT/$NAME.tar"
+python3 - "$WORK" "$OUT/$NAME.tar.gz" "$NAME" <<'PY'
+import gzip
+import sys
+import tarfile
+from pathlib import Path
+
+root, output, name = sys.argv[1:]
+source = Path(root, name)
+
+def normalize(info):
+    info.uid = info.gid = 0
+    info.uname = info.gname = ""
+    info.mtime = 0
+    return info
+
+with open(output, "wb") as raw:
+    with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
+            paths = sorted((source, *source.rglob("*")), key=lambda path: path.relative_to(Path(root)).as_posix())
+            for path in paths:
+                archive.add(path, arcname=path.relative_to(Path(root)), recursive=False, filter=normalize)
+PY
 sha256sum "$OUT/$NAME.tar.gz" > "$OUT/$NAME.tar.gz.sha256"
 printf 'built %s\n' "$OUT/$NAME.tar.gz"
