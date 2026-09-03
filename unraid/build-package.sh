@@ -29,6 +29,7 @@ install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.png" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.page" "$WORK/$NAME/unraid/"
 install -d "$OUT"
 tar --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
-    -czf "$OUT/$NAME.tar.gz" -C "$WORK" "$NAME"
+    -cf "$OUT/$NAME.tar" -C "$WORK" "$NAME"
+gzip -n -f "$OUT/$NAME.tar"
 sha256sum "$OUT/$NAME.tar.gz" > "$OUT/$NAME.tar.gz.sha256"
 printf 'built %s\n' "$OUT/$NAME.tar.gz"

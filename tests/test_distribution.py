@@ -80,6 +80,11 @@ class DistributionMetadataTests(unittest.TestCase):
         self.assertIn('test "$ACTUAL" = "$EXPECTED"', text)
         self.assertIn("actions/upload-artifact@v4", text)
 
+    def test_package_builder_uses_deterministic_gzip(self):
+        text = (UNRAID / "build-package.sh").read_text()
+        self.assertIn("gzip -n -f", text)
+        self.assertNotIn("-czf", text)
+
 
 if __name__ == "__main__":
     unittest.main()
