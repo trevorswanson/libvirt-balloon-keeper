@@ -39,6 +39,9 @@ jobs:
           cp "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz" dist/libvirt-balloon-keeper.tar.gz
           sha256sum dist/libvirt-balloon-keeper.tar.gz > dist/libvirt-balloon-keeper.tar.gz.sha256
           sha256sum -c "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz.sha256"
+          ACTUAL="$(sha256sum dist/libvirt-balloon-keeper.tar.gz | cut -d' ' -f1)"
+          EXPECTED="$(sed -n 's/.*<SHA256>\([0-9a-f]\{64\}\)<\/SHA256>.*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
       - name: Publish GitHub release assets
         env:
           GH_TOKEN: ${{ github.token }}
