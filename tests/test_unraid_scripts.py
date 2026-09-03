@@ -7,6 +7,10 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from libvirt_balloon_keeper.config import load_config
+from libvirt_balloon_keeper.unraid import discover_storage_root
 def unix_request(path, method, target):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(2)
@@ -24,6 +28,26 @@ def unix_request(path, method, target):
 
 
 class UnraidScriptTests(unittest.TestCase):
+    def test_storage_discovery_prefers_mounted_cache_and_never_guesses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mount_root = Path(directory)
+            (mount_root / "cache").mkdir()
+            (mount_root / "fast").mkdir()
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "cache"):
+                self.assertEqual(discover_storage_root(mount_root), mount_root / "cache" / "appdata/libvirt-balloon-keeper")
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "fast"):
+                self.assertEqual(discover_storage_root(mount_root), mount_root / "fast" / "appdata/libvirt-balloon-keeper")
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", return_value=False):
+                self.assertIsNone(discover_storage_root(mount_root))
+
+    def test_explicit_pool_root_must_be_a_real_mnt_mount(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text('version=1\npool_root="/mnt/cache"\n[[vms]]\nid="x"\ndomain="x"\n')
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", return_value=False):
+                with self.assertRaisesRegex(ValueError, "mounted pool"):
+                    load_config(config)
+
     def test_run_api_is_idempotent_and_owns_pid_file(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:
