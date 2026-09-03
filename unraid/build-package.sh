@@ -45,7 +45,7 @@ def normalize(info):
 
 with open(output, "wb") as raw:
     with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed:
-        with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
+        with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as archive:
             paths = sorted((source, *source.rglob("*")), key=lambda path: path.relative_to(Path(root)).as_posix())
             for path in paths:
                 archive.add(path, arcname=path.relative_to(Path(root)), recursive=False, filter=normalize)
