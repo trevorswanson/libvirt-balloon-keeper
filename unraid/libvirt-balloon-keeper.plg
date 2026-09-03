@@ -12,7 +12,7 @@
   </CHANGES>
   <FILE Name="/tmp/libvirt-balloon-keeper.tar.gz">
     <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>
-    <SHA256>70f795f98b43af57992c2eb1e3d35797926d36cd17f905971e69e2636438bd6c</SHA256>
+    <SHA256>6b809e8e4e60a1940d63eb6908200b47149060bcd667260a6badbf85e2fc94dd</SHA256>
   </FILE>
   <INSTALL plugin="&name;">
     <![CDATA[

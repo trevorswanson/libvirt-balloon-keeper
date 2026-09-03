@@ -51,7 +51,7 @@ class DistributionMetadataTests(unittest.TestCase):
     def test_plugin_installer_is_thin_verified_lifecycle_wrapper(self):
         text = (UNRAID / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("releases/download/&version;/libvirt-balloon-keeper.tar.gz", text)
-        self.assertIn("<SHA256>70f795f98b43af57992c2eb1e3d35797926d36cd17f905971e69e2636438bd6c</SHA256>", text)
+        self.assertIn("<SHA256>6b809e8e4e60a1940d63eb6908200b47149060bcd667260a6badbf85e2fc94dd</SHA256>", text)
         self.assertIn("<URL>", text)
         self.assertNotIn("releases/latest", text)
         self.assertNotIn("curl --fail", text)
@@ -82,8 +82,9 @@ class DistributionMetadataTests(unittest.TestCase):
 
     def test_package_builder_uses_deterministic_gzip(self):
         text = (UNRAID / "build-package.sh").read_text()
-        self.assertIn("gzip -n -f", text)
-        self.assertNotIn("-czf", text)
+        self.assertIn("gzip.GzipFile", text)
+        self.assertIn("mtime=0", text)
+        self.assertIn("tarfile.GNU_FORMAT", text)
 
 
 if __name__ == "__main__":
