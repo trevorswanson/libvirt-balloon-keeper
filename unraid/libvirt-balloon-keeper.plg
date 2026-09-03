@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE PLUGIN [
-  <!ENTITY name "libvirt-balloon-keeper">
-  <!ENTITY version "2026.09.01">
-  <!ENTITY author "Trevor Swanson">
+  <!ENTITY name      "libvirt-balloon-keeper">
+  <!ENTITY version   "2026.09.01">
+  <!ENTITY author    "Trevor Swanson">
+  <!ENTITY sha256    "9e52d36146c3d717ae6bd156c46a26ac8acf6ec0619ea714f674fd0d62b9df8c">
+  <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY plugflash "/boot/config/plugins/&name;">
+  <!ENTITY archive   "&plugflash;/&name;-&version;.tar.gz">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
@@ -10,31 +14,59 @@
     &version;
     - Initial Community Applications release.
   </CHANGES>
-  <FILE Name="/tmp/libvirt-balloon-keeper.tar.gz">
-    https://github.com/trevorswanson/libvirt-balloon-keeper/releases/latest/download/libvirt-balloon-keeper.tar.gz
+
+  <!--
+  Drop superseded payloads from the flash before this one is fetched.
+  -->
+  <FILE Run="/bin/bash">
+    <INLINE>
+mkdir -p &plugflash;
+for stale in &plugflash;/&name;-*.tar.gz; do
+  [ -e "$stale" ] || continue
+  case "$stale" in *"-&version;.tar.gz") continue ;; esac
+  rm -f "$stale"
+done
+    </INLINE>
   </FILE>
-  <INSTALL plugin="&name;">
-    <![CDATA[
-      set -eu
-      archive="/tmp/libvirt-balloon-keeper.tar.gz"
-      expected="$(curl --fail --silent --show-error https://github.com/trevorswanson/libvirt-balloon-keeper/releases/latest/download/libvirt-balloon-keeper.tar.gz.sha256 | awk '{print $1}')"
-      actual="$(sha256sum "$archive" | awk '{print $1}')"
-      [ -n "$expected" ] && [ "$actual" = "$expected" ] || { echo "Package checksum verification failed" >&2; exit 1; }
-      rm -rf /tmp/libvirt-balloon-keeper-release
-      mkdir -p /tmp/libvirt-balloon-keeper-release
-      tar -xzf "$archive" --strip-components=1 -C /tmp/libvirt-balloon-keeper-release
-      PLUGIN_SOURCE=/tmp/libvirt-balloon-keeper-release \
-        PLUGIN_ROOT=/boot/config/plugins/libvirt-balloon-keeper \
-        EMHTTP_ROOT=/usr/local/emhttp/plugins/libvirt-balloon-keeper \
-        bash /tmp/libvirt-balloon-keeper-release/unraid/lifecycle.sh install
-      rm -rf /tmp/libvirt-balloon-keeper-release "$archive"
-    ]]>
-  </INSTALL>
-  <REMOVE plugin="&name;">
-    <![CDATA[
-      if [ -x /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh ]; then
-        bash /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh uninstall || true
-      fi
-    ]]>
-  </REMOVE>
+
+  <!--
+  The payload. It lands on the flash rather than in /tmp so that it survives a
+  reboot: the plugin manager compares this hash against the file already on disk
+  and skips the download when it matches, which is what lets a server with no
+  network at boot still finish installing.
+  -->
+  <FILE Name="&archive;">
+    <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>
+    <SHA256>&sha256;</SHA256>
+  </FILE>
+
+  <!--
+  Post-install. No Method attribute, so this runs for an install and for an
+  update; a block marked Method="install" alone would be skipped on upgrades.
+  -->
+  <FILE Run="/bin/bash">
+    <INLINE>
+set -eu
+staging="$(mktemp -d /tmp/&name;-release.XXXXXX)"
+trap 'rm -rf "$staging"' EXIT
+tar -xzf "&archive;" --strip-components=1 -C "$staging"
+PLUGIN_SOURCE="$staging" \
+  PLUGIN_ROOT=&plugflash; \
+  EMHTTP_ROOT=&plugdir; \
+  bash "$staging/unraid/lifecycle.sh" install
+    </INLINE>
+  </FILE>
+
+  <!--
+  Uninstall.
+  -->
+  <FILE Run="/bin/bash" Method="remove">
+    <INLINE>
+if [ -x &plugflash;/lifecycle.sh ]; then
+  bash &plugflash;/lifecycle.sh uninstall || true
+fi
+rm -rf &plugdir;
+rm -rf &plugflash;
+    </INLINE>
+  </FILE>
 </PLUGIN>
