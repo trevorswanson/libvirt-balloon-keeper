@@ -179,8 +179,9 @@ The reviewed plugin lifecycle entrypoint is `unraid/lifecycle.sh`. It supports
 pool-backed state/audit paths, validate prerequisites, and install the marked cron block.
 `stop` removes only that block. `rollback` restores the previous managed
 generation and preserves configuration/state history. `uninstall` stops
-scheduling but intentionally preserves configuration and pool-backed state for
-rollback or migration review.
+scheduling and removes configured runtime state and audit files from the
+supported application storage roots. The package manager then removes the
+plugin directory and its configuration, rollback snapshots, and archives.
 
 The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`; the current
 live compatibility path under `/boot/config/custom` must not be overwritten by

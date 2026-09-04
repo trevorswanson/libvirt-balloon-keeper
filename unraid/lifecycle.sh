@@ -95,6 +95,60 @@ start_api() {
     API_PID_FILE="$API_PID_FILE" API_SOCKET="$API_SOCKET" "$API_RUNNER"
 }
 
+remove_runtime_data() {
+    [[ -f "$CONFIG" ]] || return 0
+    while IFS= read -r path; do
+        [[ -n "$path" ]] || continue
+        rm -f -- "$path" "$path.lock"
+    done < <(
+        ROOT="$ROOT" /usr/bin/python3 - "$CONFIG" <<'PY'
+import sys
+import tomllib
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+try:
+    data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+except (OSError, tomllib.TOMLDecodeError):
+    raise SystemExit(0)
+
+allowed = [
+    Path("/var/lib/libvirt-balloon-keeper"),
+    Path("/var/log/libvirt-balloon-keeper"),
+]
+pool_root = data.get("pool_root")
+if isinstance(pool_root, str) and pool_root.startswith("/mnt/"):
+    allowed.append(Path(pool_root) / "appdata/libvirt-balloon-keeper")
+
+defaults = data.get("defaults", {})
+if not isinstance(defaults, dict):
+    defaults = {}
+for index, raw in enumerate(data.get("vms", [])):
+    if not isinstance(raw, dict):
+        continue
+    merged = {**defaults, **raw}
+    runtime = merged.get("runtime", {})
+    if not isinstance(runtime, dict):
+        runtime = {}
+    identifier = merged.get("id", f"vm-{index}")
+    for key, fallback in (
+        ("state_file", f"/var/lib/libvirt-balloon-keeper/{identifier}/state.json"),
+        ("decision_log", f"/var/log/libvirt-balloon-keeper/{identifier}/decisions.jsonl"),
+    ):
+        value = merged.get(key, runtime.get(key, fallback))
+        if not isinstance(value, str):
+            continue
+        path = Path(value)
+        try:
+            resolved = path.resolve(strict=False)
+            if any(resolved.is_relative_to(root.resolve()) for root in allowed):
+                print(path)
+        except (OSError, RuntimeError, ValueError):
+            continue
+PY
+    )
+}
+
 case "${1:-}" in
     install|upgrade) install_files; check; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
@@ -102,6 +156,6 @@ case "${1:-}" in
     rollback) rollback ;;
     stop) stop_api; [[ ! -e "$API_SOCKET" || -S "$API_SOCKET" ]] && rm -f "$API_SOCKET"; rm -f "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
     check) check ;;
-    uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
+    uninstall) bash "$0" stop; remove_runtime_data; logger -t libvirt-balloon-keeper "uninstalled; plugin files, configuration, and runtime state removed" ;;
     *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|uninstall}\n' "$0" >&2; exit 64 ;;
 esac
