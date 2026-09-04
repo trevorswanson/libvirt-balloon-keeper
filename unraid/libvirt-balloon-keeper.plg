@@ -6,7 +6,7 @@
   <!ENTITY sha256    "0b32ab45239d09f079c07d8a39eb1c41ed034d0f935bcecdcb0a6c7e391e1b7b">
   <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
   <!ENTITY plugflash "/boot/config/plugins/&name;">
-  <!ENTITY archive   "&plugflash;/&name;.tar.gz">
+  <!ENTITY archive   "&plugflash;/&name;-&version;.tar.gz">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
@@ -29,7 +29,7 @@ install -d -m 0750 &plugflash;
   causes the current release to be fetched without relying on /tmp at boot.
   -->
   <FILE Name="&archive;">
-    <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;.tar.gz</URL>
+    <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>
     <SHA256>&sha256;</SHA256>
   </FILE>
 

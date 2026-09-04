@@ -60,10 +60,10 @@ class DistributionMetadataTests(unittest.TestCase):
 
         self.assertEqual(files[0].attrib["Run"], "/bin/bash")
         self.assertIsNotNone(files[0].find("INLINE"))
-        self.assertEqual(files[1].attrib["Name"], "/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper.tar.gz")
+        self.assertEqual(files[1].attrib["Name"], "/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper-2026.09.03.tar.gz")
         self.assertEqual(
             files[1].findtext("URL"),
-            "https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/2026.09.03/libvirt-balloon-keeper.tar.gz",
+            "https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/2026.09.03/libvirt-balloon-keeper-2026.09.03.tar.gz",
         )
         self.assertEqual(
             files[1].findtext("SHA256"),
