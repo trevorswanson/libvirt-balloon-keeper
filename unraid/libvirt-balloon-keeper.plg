@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE PLUGIN [
   <!ENTITY name      "libvirt-balloon-keeper">
-  <!ENTITY version   "2026.09.03">
+  <!ENTITY version "2026.09.03">
   <!ENTITY author    "Trevor Swanson">
   <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
   <!ENTITY plugflash "/boot/config/plugins/&name;">
