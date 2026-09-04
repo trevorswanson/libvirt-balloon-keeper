@@ -16,12 +16,24 @@ from .core import State, Telemetry, decide
 from .health import NotificationError, NotificationGate, Notifier, classify, health_from_state
 
 
+def _reject_symlink(path: Path) -> None:
+    """Reject symlink components before touching runtime-owned files."""
+    current = Path(path.anchor)
+    for part in path.parts[1:-1]:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"runtime path contains symlink: {path}")
+    if path.is_symlink():
+        raise ValueError(f"runtime path is a symlink: {path}")
+
+
 class BalloonAdapter(Protocol):
     def dommemstat(self, domain: str) -> Telemetry | dict[str, int]: ...
     def setmem(self, domain: str, target_kib: int) -> None: ...
 
 
 def load_state(path: Path) -> State:
+    _reject_symlink(path)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -44,6 +56,7 @@ def load_state(path: Path) -> State:
 
 
 def save_state(path: Path, state: State) -> None:
+    _reject_symlink(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary: Path | None = None
     try:
@@ -60,6 +73,7 @@ def save_state(path: Path, state: State) -> None:
 
 
 def append_decision(path: Path, *, now: float, vm: VMConfig, telemetry: Telemetry | None, target: int | None, reason: str) -> None:
+    _reject_symlink(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     entry = {
         "epoch": int(now), "vm_id": vm.id, "domain": vm.domain,

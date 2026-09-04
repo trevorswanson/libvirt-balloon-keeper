@@ -16,6 +16,20 @@ $route = isset($_GET['route']) ? $_GET['route'] : '';
 $method = $_SERVER['REQUEST_METHOD'];
 error_log('libvirt-balloon-keeper bridge request: ' . $method . ' route=' . $route);
 
+if ($method === 'POST') {
+    $request_host = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : '';
+    $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
+    $referer = isset($_SERVER['HTTP_REFERER']) ? $_SERVER['HTTP_REFERER'] : '';
+    $provenance = $origin !== '' ? $origin : $referer;
+    $provenance_host = $provenance !== '' ? parse_url($provenance, PHP_URL_HOST) : false;
+    if ($request_host === '' || $provenance_host === false || $provenance_host === null || strtolower($provenance_host) !== preg_replace('/:\\d+$/', '', $request_host)) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        echo '{"error":"same-origin request required"}';
+        exit;
+    }
+}
+
 if ($route === 'audit' && $method === 'GET') {
     $vm = isset($_GET['vm']) ? $_GET['vm'] : '';
     $limit = isset($_GET['limit']) ? $_GET['limit'] : '20';

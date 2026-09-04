@@ -138,6 +138,8 @@ class UnraidScriptTests(unittest.TestCase):
                 self.assertIn('id = "example-vm"', migrated)
                 self.assertIn(f'state_file = "{state}"', migrated)
                 self.assertEqual((plugin / "config.toml").stat().st_mode & 0o777, 0o640)
+                for source in (plugin / "libvirt_balloon_keeper").rglob("*.py"):
+                    self.assertEqual(source.stat().st_mode & 0o022, 0, source)
                 (plugin / "config.toml").write_text(migrated.replace("min_gib = 3", "min_gib = 7"))
                 subprocess.run(["bash", str(lifecycle), "install"], check=True, env=environment)
                 self.assertIn("min_gib = 7", (plugin / "config.toml").read_text())
@@ -173,6 +175,23 @@ class UnraidScriptTests(unittest.TestCase):
             self.assertFalse(pid_file.exists())
             self.assertFalse((plugin / "libvirt-balloon-keeper.cron").exists())
             self.assertNotIn("libvirt-balloon-keeper", cron_store.read_text())
+
+    def test_lifecycle_stop_preserves_non_socket_path(self):
+        repository = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            plugin = base / "plugin"
+            plugin.mkdir()
+            (plugin / "config.toml").write_text("version = 1\n\n[[vms]]\nid = 'x'\ndomain = 'x'\n")
+            socket_path = base / "api.sock"
+            socket_path.write_text("must not be deleted")
+            update_cron = base / "update_cron"
+            update_cron.write_text("#!/usr/bin/env bash\nexit 0\n")
+            update_cron.chmod(0o750)
+            environment = os.environ.copy()
+            environment.update(PLUGIN_ROOT=str(plugin), API_SOCKET=str(socket_path), UPDATE_CRON=str(update_cron))
+            subprocess.run(["bash", str(repository / "unraid/lifecycle.sh"), "stop"], check=True, env=environment)
+            self.assertEqual(socket_path.read_text(), "must not be deleted")
 
 
 if __name__ == "__main__":
