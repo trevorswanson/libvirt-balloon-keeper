@@ -37,14 +37,12 @@ The release workflow validates the tag, reruns the release validation gates,
 builds the deterministic package, verifies its checksum, and publishes these
 assets:
 
-- `libvirt-balloon-keeper-2026.09.01.tar.gz`
-- `libvirt-balloon-keeper-2026.09.01.tar.gz.sha256`
-- `libvirt-balloon-keeper.tar.gz` (stable installer target)
+- `libvirt-balloon-keeper.tar.gz`
 - `libvirt-balloon-keeper.tar.gz.sha256`
 
-After the workflow completes, verify the tag, release, and all four assets with
-GitHub before installing anything. The stable `latest/download` URLs must point
-to the newly published release.
+After the workflow completes, verify the tag, release, and both assets with
+GitHub before installing anything. The manifest's versioned release URL must
+point to the newly published release.
 
 ## Local package check
 
@@ -54,10 +52,10 @@ example:
 ```bash
 VERSION=2026.09.01 bash unraid/build-package.sh /tmp/lbk-build-a
 VERSION=2026.09.01 bash unraid/build-package.sh /tmp/lbk-build-b
-cmp /tmp/lbk-build-a/libvirt-balloon-keeper-2026.09.01.tar.gz \
-    /tmp/lbk-build-b/libvirt-balloon-keeper-2026.09.01.tar.gz
-sha256sum -c /tmp/lbk-build-a/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
-sha256sum -c /tmp/lbk-build-b/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
+cmp /tmp/lbk-build-a/libvirt-balloon-keeper.tar.gz \
+    /tmp/lbk-build-b/libvirt-balloon-keeper.tar.gz
+sha256sum -c /tmp/lbk-build-a/libvirt-balloon-keeper.tar.gz.sha256
+sha256sum -c /tmp/lbk-build-b/libvirt-balloon-keeper.tar.gz.sha256
 ```
 
 ## Community Applications files

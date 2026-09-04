@@ -2,7 +2,7 @@ SHELL := /bin/bash
 PYTHON ?= python3
 VERSION ?= $(shell sed -n 's/.*<!ENTITY version "\([^"]*\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)
 DIST ?= dist
-PACKAGE := libvirt-balloon-keeper-$(VERSION).tar.gz
+PACKAGE := libvirt-balloon-keeper.tar.gz
 
 .PHONY: all check test package package-repro package-manifest clean
 
@@ -43,7 +43,7 @@ package-manifest:
 	trap 'rm -rf "$$tmp"' EXIT; \
 	VERSION=$(VERSION) bash unraid/build-package.sh "$$tmp"; \
 	actual=$$(sha256sum "$$tmp/$(PACKAGE)" | cut -d' ' -f1); \
-	expected=$$(sed -n 's/.*<SHA256>\([0-9a-f]\{64\}\)<\/SHA256>.*/\1/p' unraid/libvirt-balloon-keeper.plg); \
+	expected=$$(sed -n 's/.*<!ENTITY sha256[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' unraid/libvirt-balloon-keeper.plg); \
 	printf 'manifest checksum: %s\nbuilt checksum: %s\n' "$$expected" "$$actual"; \
 	test -n "$$expected" && test "$$actual" = "$$expected"
 

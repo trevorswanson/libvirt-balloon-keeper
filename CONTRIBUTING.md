@@ -100,10 +100,10 @@ For package changes, build twice and compare the artifacts and checksums:
 ```bash
 VERSION=2026.09.01 bash unraid/build-package.sh /tmp/lbk-build-a
 VERSION=2026.09.01 bash unraid/build-package.sh /tmp/lbk-build-b
-cmp /tmp/lbk-build-a/libvirt-balloon-keeper-2026.09.01.tar.gz \
-    /tmp/lbk-build-b/libvirt-balloon-keeper-2026.09.01.tar.gz
-sha256sum -c /tmp/lbk-build-a/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
-sha256sum -c /tmp/lbk-build-b/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
+cmp /tmp/lbk-build-a/libvirt-balloon-keeper.tar.gz \
+    /tmp/lbk-build-b/libvirt-balloon-keeper.tar.gz
+sha256sum -c /tmp/lbk-build-a/libvirt-balloon-keeper.tar.gz.sha256
+sha256sum -c /tmp/lbk-build-b/libvirt-balloon-keeper.tar.gz.sha256
 ```
 
 ## Release process
