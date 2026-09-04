@@ -41,10 +41,11 @@ def normalize(info):
     info.uid = info.gid = 0
     info.uname = info.gname = ""
     info.mtime = 0
+    info.mode = 0o755 if info.isdir() else info.mode
     return info
 
 with open(output, "wb") as raw:
-    with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed:
+    with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=0, mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as archive:
             paths = sorted((source, *source.rglob("*")), key=lambda path: path.relative_to(Path(root)).as_posix())
             for path in paths:
