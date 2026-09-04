@@ -41,6 +41,7 @@ def normalize(info):
     info.uid = info.gid = 0
     info.uname = info.gname = ""
     info.mtime = 0
+    info.mode = 0o755 if info.isdir() else info.mode
     return info
 
 with open(output, "wb") as raw:
