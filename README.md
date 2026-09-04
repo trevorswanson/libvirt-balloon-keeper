@@ -143,7 +143,7 @@ Build a deterministic transfer bundle (the output is ignored by Git):
 
 ```bash
 VERSION=2026.09.01 bash unraid/build-package.sh
-sha256sum -c dist/libvirt-balloon-keeper.tar.gz.sha256
+sha256sum -c dist/libvirt-balloon-keeper-2026.09.01.tar.gz.sha256
 ```
 
 ## Repository hygiene

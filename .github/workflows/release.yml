@@ -36,7 +36,9 @@ jobs:
           VERSION: ${{ github.ref_name }}
         run: |
           VERSION="${VERSION#v}" bash unraid/build-package.sh dist
-          sha256sum -c dist/libvirt-balloon-keeper.tar.gz.sha256
+          cp "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz" dist/libvirt-balloon-keeper.tar.gz
+          sha256sum dist/libvirt-balloon-keeper.tar.gz > dist/libvirt-balloon-keeper.tar.gz.sha256
+          sha256sum -c "dist/libvirt-balloon-keeper-${VERSION#v}.tar.gz.sha256"
           ACTUAL="$(sha256sum dist/libvirt-balloon-keeper.tar.gz | cut -d' ' -f1)"
           EXPECTED="$(sed -n 's/.*<!ENTITY sha256[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)"
           printf 'manifest checksum: %s\nbuilt checksum: %s\n' "$EXPECTED" "$ACTUAL"
@@ -47,6 +49,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           gh release create "$TAG" \
+            "dist/libvirt-balloon-keeper-${TAG#v}.tar.gz" \
+            "dist/libvirt-balloon-keeper-${TAG#v}.tar.gz.sha256" \
             "dist/libvirt-balloon-keeper.tar.gz" \
             "dist/libvirt-balloon-keeper.tar.gz.sha256" \
             --verify-tag \

@@ -67,7 +67,7 @@ class DistributionMetadataTests(unittest.TestCase):
         )
         self.assertEqual(
             files[1].findtext("SHA256"),
-            "712332ea648807b6a39da1dee05adf2be575b50bf79c7018734f3542484792d0",
+            "bef54c06caa4ab82af322cf372e6c425207879909af909169f25bb6011044147",
         )
         self.assertEqual(files[2].attrib["Run"], "/bin/bash")
         self.assertNotIn("Method", files[2].attrib)

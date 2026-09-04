@@ -28,7 +28,7 @@ install -m 0644 "$ROOT/unraid/api.php" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.png" "$WORK/$NAME/unraid/"
 install -m 0644 "$ROOT/unraid/libvirt-balloon-keeper.page" "$WORK/$NAME/unraid/"
 install -d "$OUT"
-python3 - "$WORK" "$OUT/libvirt-balloon-keeper.tar.gz" "$NAME" <<'PY'
+python3 - "$WORK" "$OUT/$NAME.tar.gz" "$NAME" <<'PY'
 import gzip
 import sys
 import tarfile
@@ -41,15 +41,14 @@ def normalize(info):
     info.uid = info.gid = 0
     info.uname = info.gname = ""
     info.mtime = 0
-    info.mode = 0o755 if info.isdir() else info.mode
     return info
 
 with open(output, "wb") as raw:
-    with gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=0, mtime=0) as compressed:
+    with gzip.GzipFile(fileobj=raw, mode="wb", mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode="w", format=tarfile.USTAR_FORMAT) as archive:
             paths = sorted((source, *source.rglob("*")), key=lambda path: path.relative_to(Path(root)).as_posix())
             for path in paths:
                 archive.add(path, arcname=path.relative_to(Path(root)), recursive=False, filter=normalize)
 PY
-sha256sum "$OUT/libvirt-balloon-keeper.tar.gz" > "$OUT/libvirt-balloon-keeper.tar.gz.sha256"
-printf 'built %s\n' "$OUT/libvirt-balloon-keeper.tar.gz"
+sha256sum "$OUT/$NAME.tar.gz" > "$OUT/$NAME.tar.gz.sha256"
+printf 'built %s\n' "$OUT/$NAME.tar.gz"
