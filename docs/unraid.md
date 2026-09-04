@@ -54,9 +54,12 @@ release files to a temporary location):
 
 Install through the PLG so the lifecycle discovers and validates storage. Edit
 only the resulting local `config.toml`; set the real VM `domain` and retain
-`dry_run = true`. The WebGUI will write runtime paths beneath the verified
+`dry_run = true`. The WebGUI exposes separate `state_file` and `decision_log`
+fields for every VM, so users may choose other absolute persistent paths. For
+newly discovered VMs, it suggests paths beneath the verified
 `/mnt/user/appdata/libvirt-balloon-keeper` share or another verified mounted
-pool when the logical share is unavailable.
+pool when the logical share is unavailable. The paths may be different for
+each VM and do not need to share a directory; they cannot contain `..`.
 
 Validate a one-shot dry tick before adding startup automation:
 

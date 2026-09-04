@@ -14,7 +14,7 @@ from .core import KIB_PER_GIB, PolicyConfig
 DEFAULT_STATE_ROOTS: tuple[Path, ...] = (
     Path("/var/lib/libvirt-balloon-keeper"),
     Path("/var/log/libvirt-balloon-keeper"),
-    Path("/mnt/cache/appdata/libvirt-balloon-keeper"),
+    Path("/mnt/user/appdata/libvirt-balloon-keeper"),
 )
 MAX_VMS = 128
 MAX_NAME_LENGTH = 128

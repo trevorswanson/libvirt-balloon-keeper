@@ -206,6 +206,8 @@ class WebTests(unittest.TestCase):
         page = Path(__file__).parents[1] / "unraid" / "libvirt-balloon-keeper.page"
         content = page.read_text()
         self.assertIn("/plugins/libvirt-balloon-keeper/api.php", content)
+        self.assertIn('id="lbk-state-file" data-key="state_file"', content)
+        self.assertIn('id="lbk-decision-log" data-key="decision_log"', content)
         self.assertIn('Menu="Utilities"', content)
         self.assertIn('Icon="libvirt-balloon-keeper.png"', content)
         self.assertIn("req('inventory')", content)
@@ -278,7 +280,7 @@ class WebTests(unittest.TestCase):
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>", manifest)
-        self.assertIn("<!ENTITY sha256    \"e26de1961fe7509bc826f7b329ff44df8c24e83aef6b5532fbda1bc9ed84be26\">", manifest)
+        self.assertIn("<!ENTITY sha256    \"df9bd21a25e8acb67c90304a3a302b04710bc6c7a7ef6de06004ce507334eb7b\">", manifest)
         self.assertIn("<SHA256>&sha256;</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)

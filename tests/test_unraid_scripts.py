@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from libvirt_balloon_keeper.config import load_config
+from libvirt_balloon_keeper.config import DEFAULT_STATE_ROOTS, load_config
 from libvirt_balloon_keeper.unraid import discover_storage_root
 def unix_request(path, method, target):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
@@ -28,6 +28,10 @@ def unix_request(path, method, target):
 
 
 class UnraidScriptTests(unittest.TestCase):
+    def test_default_state_roots_do_not_assume_cache(self):
+        self.assertIn(Path("/mnt/user/appdata/libvirt-balloon-keeper"), DEFAULT_STATE_ROOTS)
+        self.assertNotIn(Path("/mnt/cache/appdata/libvirt-balloon-keeper"), DEFAULT_STATE_ROOTS)
+
     def test_storage_discovery_prefers_user_share_and_never_guesses(self):
         with tempfile.TemporaryDirectory() as directory:
             mount_root = Path(directory)
