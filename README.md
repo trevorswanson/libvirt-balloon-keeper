@@ -4,7 +4,7 @@ A conservative controller for **libvirt/QEMU virtio-balloon** memory. It turns t
 
 It is intentionally narrow:
 
-- versioned multi-VM configuration with legacy single-domain translation;
+- versioned multi-VM configuration;
 - a loopback-only status/configuration API and Unraid lifecycle helpers;
 - a fixed minimum and maximum target;
 - grow on sustained low usable memory or new swap activity;
@@ -128,7 +128,7 @@ python3 -m py_compile balloon_keeper.py
 python3 balloon_keeper.py --config config.example.toml --check-config
 ```
 
-The tests use fake adapters and temporary state. They cover stale/missing telemetry, hysteresis, cooldown, min/max bounds, swap-triggered growth, dry-run/live mutation, target read-back, versioned multi-VM config, migration, atomic persistence, lock contention, scheduler failure isolation, lifecycle helpers, health classification, and the loopback WebGUI/API.
+The tests use fake adapters and temporary state. They cover stale/missing telemetry, hysteresis, cooldown, min/max bounds, swap-triggered growth, dry-run/live mutation, target read-back, versioned multi-VM config, atomic persistence, lock contention, scheduler failure isolation, lifecycle helpers, health classification, and the loopback WebGUI/API.
 
 For coverage and static/security checks:
 

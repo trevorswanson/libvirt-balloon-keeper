@@ -74,10 +74,12 @@ only after the public support destination and release assets are ready. CA
 approval, catalog indexing, and local plugin installation are separate steps;
 verify each one independently.
 
-The plugin wrapper downloads the stable assets from the latest GitHub release
-and delegates installation to the managed Unraid lifecycle. Installation starts
-with the existing dry-run-safe configuration. Operators must explicitly review
-local configuration before enabling live mode.
+The plugin manifest pins a dated release asset and its SHA-256 digest, caches
+that asset under `/boot/config/plugins/libvirt-balloon-keeper/`, and delegates
+installation to the managed Unraid lifecycle through the plugin manager's
+`<FILE Run="/bin/bash">` action. Installation starts with the existing
+dry-run-safe configuration. Operators must explicitly review local
+configuration before enabling live mode.
 
 ## Installing a release on Unraid
 

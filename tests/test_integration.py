@@ -277,8 +277,9 @@ class WebTests(unittest.TestCase):
 
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
-        self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
-        self.assertIn("<SHA256>bef54c06caa4ab82af322cf372e6c425207879909af909169f25bb6011044147</SHA256>", manifest)
+        self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>", manifest)
+        self.assertIn("<!ENTITY sha256    \"880bd82877c57917a444fa296f017e2f0b5668944e2bb3fc942d1d9b242f4416\">", manifest)
+        self.assertIn("<SHA256>&sha256;</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)
 
