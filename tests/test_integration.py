@@ -108,7 +108,7 @@ class HealthAndUnraidTests(unittest.TestCase):
         layout = PluginLayout()
         validate_layout(layout)
         self.assertEqual(cron_entry(Path("/boot/config/plugins/x/run-once.sh")), "* * * * * /usr/bin/bash /boot/config/plugins/x/run-once.sh")
-        self.assertEqual(len(lifecycle_actions()), 9)
+        self.assertEqual(len(lifecycle_actions()), 8)
         with self.assertRaises(ValueError): cron_entry(Path("relative"))
         with self.assertRaises(ValueError): validate_layout(PluginLayout(boot_root=Path("relative")))
 
@@ -278,7 +278,7 @@ class WebTests(unittest.TestCase):
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>", manifest)
-        self.assertIn("<!ENTITY sha256    \"880bd82877c57917a444fa296f017e2f0b5668944e2bb3fc942d1d9b242f4416\">", manifest)
+        self.assertIn("<!ENTITY sha256    \"e26de1961fe7509bc826f7b329ff44df8c24e83aef6b5532fbda1bc9ed84be26\">", manifest)
         self.assertIn("<SHA256>&sha256;</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)

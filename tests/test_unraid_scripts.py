@@ -28,13 +28,14 @@ def unix_request(path, method, target):
 
 
 class UnraidScriptTests(unittest.TestCase):
-    def test_storage_discovery_prefers_mounted_cache_and_never_guesses(self):
+    def test_storage_discovery_prefers_user_share_and_never_guesses(self):
         with tempfile.TemporaryDirectory() as directory:
             mount_root = Path(directory)
+            (mount_root / "user").mkdir()
             (mount_root / "cache").mkdir()
             (mount_root / "fast").mkdir()
-            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "cache"):
-                self.assertEqual(discover_storage_root(mount_root), mount_root / "cache" / "appdata/libvirt-balloon-keeper")
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "user"):
+                self.assertEqual(discover_storage_root(mount_root), mount_root / "user" / "appdata/libvirt-balloon-keeper")
             with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "fast"):
                 self.assertEqual(discover_storage_root(mount_root), mount_root / "fast" / "appdata/libvirt-balloon-keeper")
             with patch("libvirt_balloon_keeper.unraid.os.path.ismount", return_value=False):

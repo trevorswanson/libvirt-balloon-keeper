@@ -11,10 +11,10 @@ systemd hosts; this Unraid path uses the persistent boot device and
 The controller stores only its durable runtime state in the selected storage
 root: per-VM `state.json` files (sample history, cooldowns, and cumulative
 swap counters), per-VM `decisions.jsonl` audit logs, and short-lived lock files.
-The WebGUI prefers `/mnt/cache` only when it is an actual mounted directory;
-otherwise it selects another mounted pool, then `/mnt/user` as a persistent
-share fallback. It never creates a guessed `/mnt/cache` tree. If no persistent
-mount is available, newly discovered VMs cannot be saved until storage exists.
+The WebGUI prefers the logical `/mnt/user` share only when it is an actual
+mounted directory, then selects another mounted pool. It never creates or
+assumes a `/mnt/cache` tree or any particular pool name. If no persistent mount
+is available, newly discovered VMs cannot be saved until storage exists.
 
 An explicit `pool_root` must be a direct child of `/mnt` and an existing mount;
 the configuration validator rejects ordinary directories and paths elsewhere.
@@ -26,7 +26,7 @@ Use three locations with different jobs:
 | Location | Contents | Why |
 |---|---|---|
 | `/boot/config/plugins/libvirt-balloon-keeper/` | Managed code, `config.toml`, scheduler fragment, and API runtime files | Persisted on the Unraid boot device and installed by `lifecycle.sh`. |
-| `/mnt/<mounted-pool>/appdata/libvirt-balloon-keeper/` | Per-VM `state.json`, `decisions.jsonl`, and lock files | Persistent write-heavy state on a verified mounted pool (or `/mnt/user` fallback), never a guessed directory. |
+| `/mnt/user/appdata/libvirt-balloon-keeper/` | Per-VM `state.json`, `decisions.jsonl`, and lock files | Canonical logical location on a verified user share; another verified mounted pool may be selected when unavailable. |
 | `/boot/config/go` | host startup integration | Managed by Unraid's plugin lifecycle; do not hand-edit generated cron state. |
 
 The cron wrapper runs one controller tick and exits. If the array/pool or VM is
@@ -52,23 +52,11 @@ Back up the boot device in the Unraid WebGUI before changing `config/go`:
 From a checked-out release directory on the host (or after copying reviewed
 release files to a temporary location):
 
-```bash
-install -d -m 0700 /boot/config/custom/libvirt-balloon-keeper
-install -d -m 0700 /mnt/CACHE_POOL/appdata/libvirt-balloon-keeper
-install -m 0644 balloon_keeper.py /boot/config/custom/libvirt-balloon-keeper/
-install -m 0644 unraid/run-libvirt-balloon-keeper-cron.sh /boot/config/custom/libvirt-balloon-keeper/
-install -m 0644 unraid/install-cron.sh /boot/config/custom/libvirt-balloon-keeper/
-install -m 0640 config.example.toml /boot/config/custom/libvirt-balloon-keeper/config.toml
-```
-
-Edit only the local `config.toml`. Set the real VM `domain`, retain
-`dry_run = true`, and set these paths to the physical cache pool selected above:
-
-```toml
-[runtime]
-state_file = "/mnt/CACHE_POOL/appdata/libvirt-balloon-keeper/state.json"
-decision_log = "/mnt/CACHE_POOL/appdata/libvirt-balloon-keeper/decisions.jsonl"
-```
+Install through the PLG so the lifecycle discovers and validates storage. Edit
+only the resulting local `config.toml`; set the real VM `domain` and retain
+`dry_run = true`. The WebGUI will write runtime paths beneath the verified
+`/mnt/user/appdata/libvirt-balloon-keeper` share or another verified mounted
+pool when the logical share is unavailable.
 
 Validate a one-shot dry tick before adding startup automation:
 
@@ -183,10 +171,9 @@ scheduling and removes configured runtime state and audit files from the
 supported application storage roots. The package manager then removes the
 plugin directory and its configuration, rollback snapshots, and archives.
 
-The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`; the current
-live compatibility path under `/boot/config/custom` must not be overwritten by
-this preview. State and audit paths come from the configuration; the lifecycle
-does not assume or create a particular cache-pool mount. Then perform, in order:
+The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`. State and
+audit paths come from the configuration; the lifecycle does not assume or
+create a particular pool mount. Then perform, in order:
 
 1. back up the Unraid boot device;
 2. install with `dry_run = true` and run `check`;

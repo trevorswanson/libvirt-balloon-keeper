@@ -7,14 +7,15 @@ import os
 
 
 APPDATA_NAME = "appdata/libvirt-balloon-keeper"
-PREFERRED_POOL_NAMES = ("cache",)
-SHARE_FALLBACK_NAMES = ("user",)
+# Prefer Unraid's logical user-share mount. It may be backed by any pool.
+PREFERRED_POOL_NAMES = ("user",)
+SHARE_FALLBACK_NAMES: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class PluginLayout:
     boot_root: Path = Path("/boot/config/plugins/libvirt-balloon-keeper")
-    pool_root: Path = Path("/mnt/cache/appdata/libvirt-balloon-keeper")
+    pool_root: Path | None = None
     cron_marker: str = "libvirt-balloon-keeper"
 
     @property
@@ -22,12 +23,12 @@ class PluginLayout:
         return self.boot_root / "config.toml"
 
     @property
-    def state_root(self) -> Path:
-        return self.pool_root / "state"
+    def state_root(self) -> Path | None:
+        return self.pool_root / "state" if self.pool_root else None
 
     @property
-    def log_root(self) -> Path:
-        return self.pool_root / "logs"
+    def log_root(self) -> Path | None:
+        return self.pool_root / "logs" if self.pool_root else None
 
 
 def _mounted_directory(path: Path) -> bool:
@@ -67,10 +68,13 @@ def validate_pool_root(path: Path) -> None:
 
 
 def validate_layout(layout: PluginLayout) -> None:
-    for name, path in (("boot_root", layout.boot_root), ("pool_root", layout.pool_root)):
+    paths = [("boot_root", layout.boot_root)]
+    if layout.pool_root is not None:
+        paths.append(("pool_root", layout.pool_root))
+    for name, path in paths:
         if not path.is_absolute() or ".." in path.parts:
             raise ValueError(f"{name} must be an absolute non-traversing path")
-    if layout.boot_root == layout.pool_root:
+    if layout.pool_root is not None and layout.boot_root == layout.pool_root:
         raise ValueError("boot and pool storage must be separate")
 
 
@@ -84,4 +88,4 @@ def cron_entry(wrapper: Path, interval_minutes: int = 1) -> str:
 
 
 def lifecycle_actions() -> tuple[str, ...]:
-    return ("install", "start", "stop", "restart", "upgrade", "rollback", "uninstall", "check", "migrate")
+    return ("install", "start", "stop", "restart", "upgrade", "rollback", "uninstall", "check")
