@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE PLUGIN [
   <!ENTITY name "libvirt-balloon-keeper">
-  <!ENTITY version "2026.09.02">
+  <!ENTITY version "2026.09.03">
   <!ENTITY author "Trevor Swanson">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
@@ -12,7 +12,7 @@
   </CHANGES>
   <FILE Name="/tmp/libvirt-balloon-keeper.tar.gz">
     <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>
-    <SHA256>d9c3e7bad17538508d490788b9dd8d9bca892aa948f789f8027bbcd24122e2f7</SHA256>
+    <SHA256>048cb850c50e9b8caf5d660f466af116569700707238c659e193f3b9bd1a1a10</SHA256>
   </FILE>
   <INSTALL plugin="&name;">
     <![CDATA[

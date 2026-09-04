@@ -6,17 +6,32 @@ import json
 import os
 import re
 import tempfile
+import threading
 import time
 import tomllib
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingMixIn, UnixStreamServer
 from pathlib import Path
+from typing import Union
 from urllib.parse import parse_qs, urlparse
 
 from .adapter import LibvirtError, VirshAdapter
 from .config import DEFAULT_STATE_ROOTS, AppConfig, VMConfig, load_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
+
+
+class ThreadingUnixHTTPServer(ThreadingMixIn, UnixStreamServer):
+    """Threaded HTTP server bound to a filesystem socket."""
+
+    daemon_threads = True
+
+    def server_close(self):
+        socket_path = self.server_address
+        super().server_close()
+        path = Path(str(socket_path))
+        if path.is_socket(): path.unlink()
 
 
 def _vm_payload(vm: VMConfig, state=None, telemetry=None, capability=None, error=None) -> dict:
@@ -172,11 +187,13 @@ def state_roots_for(config: AppConfig) -> tuple[Path, ...]:
 
 
 def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None,
-                  state_roots: tuple[Path, ...] | None = None) -> ThreadingHTTPServer:
+                  state_roots: tuple[Path, ...] | None = None,
+                  socket_path: Path | None = None) -> Union[ThreadingHTTPServer, ThreadingUnixHTTPServer]:
     config = load_config(config_path)
     # Anything on the loopback interface can POST a configuration, so the paths
     # it names are confined to the state directories the on-disk config allows.
     if state_roots is None: state_roots = state_roots_for(config)
+    config_lock = threading.Lock()
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, content_type="application/json"):
             self.send_response(status); self.send_header("Content-Type", content_type)
@@ -187,11 +204,13 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
                 try: self._send(200, config_path.read_bytes(), "text/plain; charset=utf-8")
                 except OSError: self.send_error(503, "configuration unavailable")
             elif parsed.path in {"/api/status", "/api/inventory"}:
-                payload = inventory_payload(config, adapter) if parsed.path.endswith("inventory") else status_payload(config, adapter=adapter)
+                with config_lock: current_config = config
+                payload = inventory_payload(current_config, adapter) if parsed.path.endswith("inventory") else status_payload(current_config, adapter=adapter)
                 self._send(200, json.dumps(payload).encode())
             elif parsed.path == "/api/audit":
                 query = parse_qs(parsed.query); ids = query.get("vm", [])
-                selected = next((vm for vm in config.vms if vm.id in ids), None)
+                with config_lock: current_config = config
+                selected = next((vm for vm in current_config.vms if vm.id in ids), None)
                 if selected is None: self.send_error(404, "unknown VM"); return
                 try: body = json.dumps({"vm": selected.id, "entries": read_audit(selected.decision_log, int(query.get("limit", ["50"])[0]))}).encode()
                 except (ValueError, TypeError): self.send_error(400, "invalid audit limit"); return
@@ -205,6 +224,7 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
             except ValueError: self.send_error(400, "invalid content length"); return
             if length < 0 or length > 256 * 1024: self.send_error(413); return
             raw = self.rfile.read(length)
+            if len(raw) != length: self.send_error(400, "incomplete request body"); return
             if route == "/api/validate":
                 try:
                     if self.headers.get("Content-Type", "").startswith("application/json"):
@@ -219,18 +239,29 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
                 self._send(200, b'{"valid": true}'); return
             if route == "/api/config":
                 if self.headers.get("X-Confirm") != "apply": self.send_error(428, "send X-Confirm: apply to save configuration"); return
-                try: new_config = load_config_from_text(raw.decode("utf-8"), state_roots)
-                except (UnicodeDecodeError, ValueError): self.send_error(400, "configuration rejected"); return
-                try: atomic_write_config(config_path, raw.decode("utf-8"))
-                except OSError: self.send_error(400, "configuration rejected"); return
-                config = new_config; self._send(200, b'{"saved": true}'); return
+                with config_lock:
+                    try: text = raw.decode("utf-8"); new_config = load_config_from_text(text, state_roots)
+                    except (UnicodeDecodeError, ValueError): self.send_error(400, "configuration rejected"); return
+                    try: atomic_write_config(config_path, text)
+                    except OSError: self.send_error(400, "configuration rejected"); return
+                    config = new_config
+                self._send(200, b'{"saved": true}'); return
             if route != "/api/configuration" or self.headers.get("X-Confirm") != "apply": self.send_error(428 if route == "/api/configuration" else 404); return
-            try:
-                text = load_config_from_json(raw); new_config = load_config_from_text(text, state_roots)
-                atomic_write_config(config_path, text); config = new_config
-            except (ValueError, OSError, json.JSONDecodeError): self.send_error(400, "configuration rejected"); return
+            with config_lock:
+                try:
+                    text = load_config_from_json(raw); new_config = load_config_from_text(text, state_roots)
+                    atomic_write_config(config_path, text); config = new_config
+                except (ValueError, OSError, json.JSONDecodeError): self.send_error(400, "configuration rejected"); return
             self._send(200, b'{"saved": true}')
         def log_message(self, format, *args): return
+    if socket_path is not None:
+        socket_path = Path(socket_path)
+        if not socket_path.is_absolute(): raise ValueError("API socket path must be absolute")
+        if socket_path.exists() and not socket_path.is_socket(): raise ValueError("API socket path is not a socket")
+        if socket_path.exists(): socket_path.unlink()
+        server = ThreadingUnixHTTPServer(str(socket_path), Handler)
+        os.chmod(socket_path, 0o600)
+        return server
     if host not in {"127.0.0.1", "::1", "localhost"}: raise ValueError("status server must bind to loopback")
     return ThreadingHTTPServer((host, port), Handler)
 

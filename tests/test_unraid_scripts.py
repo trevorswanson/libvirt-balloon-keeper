@@ -1,12 +1,26 @@
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import tempfile
 import time
 import unittest
 from pathlib import Path
-from urllib.request import urlopen
+def unix_request(path, method, target):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(2)
+        client.connect(str(path))
+        client.sendall(f"{method} {target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".encode())
+        response = b""
+        while True:
+            chunk = client.recv(65536)
+            if not chunk:
+                break
+            response += chunk
+    header, body = response.split(b"\r\n\r\n", 1)
+    status = int(header.splitlines()[0].split()[1])
+    return status, body
 
 
 class UnraidScriptTests(unittest.TestCase):
@@ -19,13 +33,14 @@ class UnraidScriptTests(unittest.TestCase):
             shutil.copytree(repository / "libvirt_balloon_keeper", root / "libvirt_balloon_keeper")
             shutil.copy(repository / "config.example.toml", root / "config.toml")
             pid_file = Path(directory) / "api.pid"
+            socket_path = Path(directory) / "api.sock"
             log_file = Path(directory) / "api.log"
             environment = os.environ.copy()
             environment.update(
                 PLUGIN_ROOT=str(root),
                 API_PID_FILE=str(pid_file),
                 API_LOG_FILE=str(log_file),
-                API_PORT="18766",
+                API_SOCKET=str(socket_path),
             )
             script = repository / "unraid" / "run-api.sh"
             subprocess.run(["bash", str(script)], check=True, env=environment)
@@ -34,15 +49,16 @@ class UnraidScriptTests(unittest.TestCase):
                 deadline = time.monotonic() + 5
                 while True:
                     try:
-                        with urlopen("http://127.0.0.1:18766/api/status", timeout=1) as response:
-                            self.assertEqual(response.status, 200)
-                            break
+                        status, _ = unix_request(socket_path, "GET", "/api/status")
+                        self.assertEqual(status, 200)
+                        break
                     except OSError:
                         if time.monotonic() >= deadline:
                             self.fail("API did not become ready")
                         time.sleep(0.05)
                 subprocess.run(["bash", str(script)], check=True, env=environment)
                 self.assertEqual(int(pid_file.read_text()), pid)
+                self.assertEqual(socket_path.stat().st_mode & 0o777, 0o600)
             finally:
                 os.kill(pid, signal.SIGTERM)
                 for _ in range(50):
@@ -53,14 +69,14 @@ class UnraidScriptTests(unittest.TestCase):
                     time.sleep(0.02)
                 pid_file.unlink(missing_ok=True)
 
-    def test_run_api_rejects_invalid_port(self):
+    def test_run_api_rejects_relative_socket(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "plugin"
             root.mkdir()
             (root / "config.toml").write_text("version = 1\n\n[defaults]\n\n[[vms]]\nid = 'x'\ndomain = 'x'\nstate_file = '/tmp/x'\ndecision_log = '/tmp/l'\n")
             environment = os.environ.copy()
-            environment.update(PLUGIN_ROOT=str(root), API_PORT="not-a-port")
+            environment.update(PLUGIN_ROOT=str(root), API_SOCKET="relative.sock")
             result = subprocess.run(
                 ["bash", str(repository / "unraid" / "run-api.sh")],
                 env=environment,
@@ -99,6 +115,7 @@ class UnraidScriptTests(unittest.TestCase):
             plugin = base / "plugin"
             emhttp = base / "emhttp"
             pid_file = base / "api.pid"
+            socket_path = base / "api.sock"
             log_file = base / "api.log"
             environment = os.environ.copy()
             environment.update(
@@ -112,7 +129,7 @@ class UnraidScriptTests(unittest.TestCase):
                 EMHTTP_ROOT=str(emhttp),
                 API_PID_FILE=str(pid_file),
                 API_LOG_FILE=str(log_file),
-                API_PORT="18767",
+                API_SOCKET=str(socket_path),
             )
             lifecycle = repository / "unraid" / "lifecycle.sh"
             try:
@@ -131,21 +148,22 @@ class UnraidScriptTests(unittest.TestCase):
                 deadline = time.monotonic() + 5
                 while True:
                     try:
-                        with urlopen("http://127.0.0.1:18767/api/config", timeout=1) as response:
-                            self.assertEqual(response.status, 200)
-                            break
+                        status, _ = unix_request(socket_path, "GET", "/api/config")
+                        self.assertEqual(status, 200)
+                        break
                     except OSError:
                         if time.monotonic() >= deadline:
                             self.fail(log_file.read_text())
                         time.sleep(0.05)
                 self.assertTrue((plugin / "web_server.py").exists())
+                self.assertEqual(socket_path.stat().st_mode & 0o777, 0o600)
                 self.assertTrue((plugin / "lifecycle.sh").exists())
                 self.assertTrue((emhttp / "libvirt-balloon-keeper.page").exists())
                 fragment = (plugin / "libvirt-balloon-keeper.cron").read_text()
                 self.assertEqual(fragment, f"* * * * * /usr/bin/bash {plugin / 'run-once.sh'}\n")
                 self.assertEqual(cron_store.read_text(), fragment)
-                with urlopen("http://127.0.0.1:18767/api/config", timeout=2) as response:
-                    self.assertEqual(response.status, 200)
+                status, _ = unix_request(socket_path, "GET", "/api/config")
+                self.assertEqual(status, 200)
                 subprocess.run(["bash", str(lifecycle), "uninstall"], check=True, env=environment)
                 self.assertTrue((plugin / "config.toml").exists())
                 self.assertFalse(state.parent.exists())

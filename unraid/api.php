@@ -41,41 +41,65 @@ if ($route === 'audit' && $method === 'GET') {
     exit;
 }
 
-$headers = array('Accept: application/json, text/plain');
 $body = null;
 if ($method === 'POST') {
     $body = file_get_contents('php://input', false, null, 0, 262144);
     if ($body === false) {
         $body = '';
     }
-    $headers[] = 'Content-Type: text/plain; charset=utf-8';
-    if (in_array($route, array('save', 'save-configuration'), true)) {
-        $headers[] = 'X-Confirm: apply';
-    }
 }
-$options = array(
-    'http' => array(
-        'method' => $method,
-        'header' => implode("\r\n", $headers),
-        'ignore_errors' => true,
-        'timeout' => 5,
-    ),
-);
-if ($body !== null) {
-    $options['http']['content'] = $body;
-}
-$response = @file_get_contents('http://127.0.0.1:8765' . $target, false, stream_context_create($options));
-if ($response === false) {
+$socket = '/var/run/libvirt-balloon-keeper-api.sock';
+$errno = 0;
+$errstr = '';
+$connection = @stream_socket_client('unix://' . $socket, $errno, $errstr, 5, STREAM_CLIENT_CONNECT);
+if ($connection === false) {
     error_log('libvirt-balloon-keeper bridge response: route=' . $route . ' status=503 upstream=unavailable');
     http_response_code(503);
     header('Content-Type: application/json');
     echo '{"error":"keeper API unavailable"}';
     exit;
 }
-$status = 502;
-if (isset($http_response_header[0]) && preg_match('/\s([0-9]{3})\s/', $http_response_header[0], $match)) {
-    $status = (int) $match[1];
+$request_headers = array(
+    $method . ' ' . $target . ' HTTP/1.1',
+    'Host: localhost',
+    'Connection: close',
+    'Accept: application/json, text/plain',
+);
+if ($body !== null) {
+    $request_headers[] = 'Content-Type: text/plain; charset=utf-8';
+    $request_headers[] = 'Content-Length: ' . strlen($body);
 }
+if (in_array($route, array('save', 'save-configuration'), true)) {
+    $request_headers[] = 'X-Confirm: apply';
+}
+$request = implode("\r\n", $request_headers) . "\r\n\r\n" . ($body === null ? '' : $body);
+$written = 0;
+while ($written < strlen($request)) {
+    $count = @fwrite($connection, substr($request, $written));
+    if ($count === false || $count === 0) {
+        fclose($connection);
+        error_log('libvirt-balloon-keeper bridge response: route=' . $route . ' status=503 upstream=write-failed');
+        http_response_code(503);
+        header('Content-Type: application/json');
+        echo '{"error":"keeper API unavailable"}';
+        exit;
+    }
+    $written += $count;
+}
+stream_set_timeout($connection, 5);
+$raw_response = stream_get_contents($connection);
+fclose($connection);
+$raw_response = $raw_response === false ? '' : $raw_response;
+$separator = strpos($raw_response, "\r\n\r\n");
+if ($separator === false || !preg_match('/^HTTP\/[^ ]+ ([0-9]{3})\b/', $raw_response, $match)) {
+    error_log('libvirt-balloon-keeper bridge response: route=' . $route . ' status=502 upstream=malformed');
+    http_response_code(502);
+    header('Content-Type: application/json');
+    echo '{"error":"keeper API returned an invalid response"}';
+    exit;
+}
+$status = (int) $match[1];
+$response = substr($raw_response, $separator + 4);
 http_response_code($status);
 error_log('libvirt-balloon-keeper bridge response: route=' . $route . ' status=' . $status);
 header('Content-Type: ' . ($route === 'config' ? 'text/plain; charset=utf-8' : 'application/json'));

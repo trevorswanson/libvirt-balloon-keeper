@@ -246,13 +246,17 @@ class WebTests(unittest.TestCase):
 
         proxy = Path(__file__).parents[1] / "unraid" / "api.php"
         proxy_content = proxy.read_text()
-        self.assertIn("127.0.0.1:8765", proxy_content)
+        self.assertIn("/var/run/libvirt-balloon-keeper-api.sock", proxy_content)
+        self.assertIn("stream_socket_client", proxy_content)
+        self.assertIn("X-Confirm: apply", proxy_content)
+        self.assertNotIn("127.0.0.1:8765", proxy_content)
         self.assertIn("'status'", proxy_content)
         self.assertIn("'inventory'", proxy_content)
         self.assertIn("'save-configuration'", proxy_content)
         self.assertIn("array('save', 'save-configuration')", proxy_content)
         self.assertNotIn("if ($route === 'save'", proxy_content)
         self.assertNotIn("shell_exec", proxy_content)
+        self.assertNotIn("file_get_contents('http://", proxy_content)
         self.assertIn("Cache-Control: no-store", proxy_content)
 
     def test_native_page_disables_inventory_cache(self):
@@ -264,7 +268,7 @@ class WebTests(unittest.TestCase):
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
         self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
-        self.assertIn("<SHA256>d9c3e7bad17538508d490788b9dd8d9bca892aa948f789f8027bbcd24122e2f7</SHA256>", manifest)
+        self.assertIn("<SHA256>048cb850c50e9b8caf5d660f466af116569700707238c659e193f3b9bd1a1a10</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)
 

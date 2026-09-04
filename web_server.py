@@ -12,10 +12,9 @@ from libvirt_balloon_keeper.adapter import VirshAdapter
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--socket", type=Path, required=True)
     args = parser.parse_args()
-    server = create_server(args.config, args.host, args.port, adapter=VirshAdapter())
+    server = create_server(args.config, adapter=VirshAdapter(), socket_path=args.socket)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
