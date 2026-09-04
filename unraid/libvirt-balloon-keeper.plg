@@ -3,6 +3,7 @@
   <!ENTITY name      "libvirt-balloon-keeper">
   <!ENTITY version "2026.09.03">
   <!ENTITY author    "Trevor Swanson">
+  <!ENTITY sha256    "bef54c06caa4ab82af322cf372e6c425207879909af909169f25bb6011044147">
   <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
   <!ENTITY plugflash "/boot/config/plugins/&name;">
   <!ENTITY archive   "&plugflash;/&name;.tar.gz">
@@ -29,7 +30,7 @@ install -d -m 0750 &plugflash;
   -->
   <FILE Name="&archive;">
     <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;.tar.gz</URL>
-    <SHA256>bef54c06caa4ab82af322cf372e6c425207879909af909169f25bb6011044147</SHA256>
+    <SHA256>&sha256;</SHA256>
   </FILE>
 
   <!--
