@@ -6,6 +6,8 @@ SOURCE="${PLUGIN_SOURCE:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 CONFIG="${ROOT}/config.toml"
 WRAPPER="${ROOT}/run-once.sh"
 INSTALLER="${ROOT}/install-cron.sh"
+CRON_FRAGMENT="${ROOT}/libvirt-balloon-keeper.cron"
+UPDATE_CRON="${UPDATE_CRON:-/usr/local/sbin/update_cron}"
 API_RUNNER="${ROOT}/run-api.sh"
 API_PID_FILE="${API_PID_FILE:-/var/run/libvirt-balloon-keeper-api.pid}"
 EMHTTP_ROOT="${EMHTTP_ROOT:-/usr/local/emhttp/plugins/libvirt-balloon-keeper}"
@@ -61,7 +63,7 @@ if migrate_legacy_config(Path(sys.argv[1]), Path(sys.argv[2])):
 install_files() {
     backup_current
     install -d -m 0750 "$ROOT"
-    install -d -m 0750 "${POOL_ROOT:-/mnt/cache/appdata/libvirt-balloon-keeper}"
+
     install -m 0644 "$SOURCE/balloon_keeper.py" "$ROOT/"
     install -m 0644 "$SOURCE/web_server.py" "$ROOT/"
     cp -R "$SOURCE/libvirt_balloon_keeper" "$ROOT/"
@@ -103,17 +105,12 @@ start_api() {
 }
 
 case "${1:-}" in
-    install|upgrade) migrate_legacy; install_files; check; "$INSTALLER"; start_api ;;
+    install|upgrade) migrate_legacy; install_files; check; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     migrate) migrate_legacy ;;
-    start) "$INSTALLER"; start_api ;;
-    restart) stop_api; "$INSTALLER"; start_api ;;
+    start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
+    restart) stop_api; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     rollback) rollback ;;
-    stop) stop_api; crontab -l 2>/dev/null | /usr/bin/python3 -c 'import sys
-b="# BEGIN libvirt-balloon-keeper"; e="# END libvirt-balloon-keeper"; skip=False
-for line in sys.stdin:
-    if line.rstrip("\n")==b: skip=True; continue
-    if line.rstrip("\n")==e: skip=False; continue
-    if not skip: sys.stdout.write(line)' | crontab - ;;
+    stop) stop_api; rm -f "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
     check) check ;;
     uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
     *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|uninstall}\n' "$0" >&2; exit 64 ;;

@@ -117,7 +117,11 @@ def run_schedule(config: AppConfig, adapter: BalloonAdapter, now: float | None =
             health = classify("disabled")
         else:
             try:
-                results[vm.id] = run_vm_tick(vm, adapter, now)[0]
+                prior_state = load_state(vm.state_file)
+                if prior_state.last_success_epoch > 0 and now < prior_state.last_success_epoch + vm.interval_seconds:
+                    results[vm.id] = "hold: interval not elapsed"
+                else:
+                    results[vm.id] = run_vm_tick(vm, adapter, now)[0]
                 if results[vm.id].startswith("hold: another invocation"):
                     health = classify(results[vm.id])
                 else:

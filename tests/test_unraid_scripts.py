@@ -76,12 +76,10 @@ class UnraidScriptTests(unittest.TestCase):
             fake_bin = base / "bin"
             fake_bin.mkdir()
             cron_store = base / "crontab"
-            (fake_bin / "crontab").write_text(
+            (fake_bin / "update_cron").write_text(
                 "#!/usr/bin/env bash\n"
                 "set -e\n"
-                "store=${CRONTAB_STORE}\n"
-                "if [[ ${1:-} == -l ]]; then [[ -f $store ]] && cat $store; exit 0; fi\n"
-                "cat \"$1\" > $store\n"
+                "cat ${PLUGIN_ROOT}/*.cron > ${CRONTAB_STORE} 2>/dev/null || : > ${CRONTAB_STORE}\n"
             )
             (fake_bin / "virsh").write_text("#!/usr/bin/env bash\nexit 0\n")
             (fake_bin / "logger").write_text("#!/usr/bin/env bash\nexit 0\n")
@@ -106,6 +104,7 @@ class UnraidScriptTests(unittest.TestCase):
             environment.update(
                 PATH=f"{fake_bin}:{environment['PATH']}",
                 CRONTAB_STORE=str(cron_store),
+                UPDATE_CRON=str(fake_bin / "update_cron"),
                 PLUGIN_ROOT=str(plugin),
                 PLUGIN_SOURCE=str(repository),
                 POOL_ROOT=str(pool),
@@ -142,18 +141,19 @@ class UnraidScriptTests(unittest.TestCase):
                 self.assertTrue((plugin / "web_server.py").exists())
                 self.assertTrue((plugin / "lifecycle.sh").exists())
                 self.assertTrue((emhttp / "libvirt-balloon-keeper.page").exists())
-                schedule = cron_store.read_text()
-                self.assertEqual(schedule.count("# BEGIN libvirt-balloon-keeper"), 1)
-                self.assertEqual(schedule.count("# END libvirt-balloon-keeper"), 1)
-                self.assertEqual(schedule.count("run-once.sh"), 1)
+                fragment = (plugin / "libvirt-balloon-keeper.cron").read_text()
+                self.assertEqual(fragment, f"* * * * * /usr/bin/bash {plugin / 'run-once.sh'}\n")
+                self.assertEqual(cron_store.read_text(), fragment)
                 with urlopen("http://127.0.0.1:18767/api/config", timeout=2) as response:
                     self.assertEqual(response.status, 200)
                 subprocess.run(["bash", str(lifecycle), "uninstall"], check=True, env=environment)
                 self.assertTrue((plugin / "config.toml").exists())
-                self.assertTrue(state.parent.exists())
+                self.assertFalse(state.parent.exists())
+                self.assertFalse((base / "mnt" / "cache" / "appdata" / "libvirt-balloon-keeper").exists())
             finally:
                 subprocess.run(["bash", str(lifecycle), "stop"], check=False, env=environment)
             self.assertFalse(pid_file.exists())
+            self.assertFalse((plugin / "libvirt-balloon-keeper.cron").exists())
             self.assertNotIn("libvirt-balloon-keeper", cron_store.read_text())
 
 

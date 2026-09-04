@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .adapter import LibvirtError, VirshAdapter
-from .config import AppConfig, VMConfig, load_config
+from .config import DEFAULT_STATE_ROOTS, AppConfig, VMConfig, load_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
 
@@ -161,8 +161,22 @@ def read_audit(path: Path, limit: int = 50) -> list[dict]:
     return entries
 
 
-def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None) -> ThreadingHTTPServer:
+def state_roots_for(config: AppConfig) -> tuple[Path, ...]:
+    """Directories a configuration submitted over the API may place state and audit files in."""
+    roots = list(DEFAULT_STATE_ROOTS)
+    if config.pool_root is not None:
+        roots.append(config.pool_root)
+    for vm in config.vms:
+        roots.extend((vm.state_file.parent, vm.decision_log.parent))
+    return tuple(roots)
+
+
+def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None,
+                  state_roots: tuple[Path, ...] | None = None) -> ThreadingHTTPServer:
     config = load_config(config_path)
+    # Anything on the loopback interface can POST a configuration, so the paths
+    # it names are confined to the state directories the on-disk config allows.
+    if state_roots is None: state_roots = state_roots_for(config)
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, content_type="application/json"):
             self.send_response(status); self.send_header("Content-Type", content_type)
@@ -205,14 +219,14 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
                 self._send(200, b'{"valid": true}'); return
             if route == "/api/config":
                 if self.headers.get("X-Confirm") != "apply": self.send_error(428, "send X-Confirm: apply to save configuration"); return
-                try: new_config = load_config_from_text(raw.decode("utf-8"))
+                try: new_config = load_config_from_text(raw.decode("utf-8"), state_roots)
                 except (UnicodeDecodeError, ValueError): self.send_error(400, "configuration rejected"); return
                 try: atomic_write_config(config_path, raw.decode("utf-8"))
                 except OSError: self.send_error(400, "configuration rejected"); return
                 config = new_config; self._send(200, b'{"saved": true}'); return
             if route != "/api/configuration" or self.headers.get("X-Confirm") != "apply": self.send_error(428 if route == "/api/configuration" else 404); return
             try:
-                text = load_config_from_json(raw); new_config = load_config_from_text(text)
+                text = load_config_from_json(raw); new_config = load_config_from_text(text, state_roots)
                 atomic_write_config(config_path, text); config = new_config
             except (ValueError, OSError, json.JSONDecodeError): self.send_error(400, "configuration rejected"); return
             self._send(200, b'{"saved": true}')
@@ -221,9 +235,9 @@ def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, ada
     return ThreadingHTTPServer((host, port), Handler)
 
 
-def load_config_from_text(text):
+def load_config_from_text(text, state_roots=None):
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".toml") as f:
-        f.write(text); f.flush(); return load_config(Path(f.name))
+        f.write(text); f.flush(); return load_config(Path(f.name), state_roots)
 
 
 def load_config_from_json(raw): return config_from_payload(json.loads(raw.decode("utf-8")))
