@@ -13,8 +13,6 @@ API_PID_FILE="${API_PID_FILE:-/var/run/libvirt-balloon-keeper-api.pid}"
 API_SOCKET="${API_SOCKET:-/var/run/libvirt-balloon-keeper-api.sock}"
 [[ "$API_SOCKET" = /* ]] || { printf 'invalid API socket\n' >&2; exit 64; }
 EMHTTP_ROOT="${EMHTTP_ROOT:-/usr/local/emhttp/plugins/libvirt-balloon-keeper}"
-LEGACY_ROOT="${LEGACY_ROOT:-/boot/config/custom/libvirt-balloon-keeper}"
-LEGACY_CONFIG="${LEGACY_ROOT}/config.toml"
 ROLLBACK_ROOT="${ROOT}/.rollback"
 
 backup_current() {
@@ -50,16 +48,6 @@ rollback() {
     check
     "$INSTALLER"
     start_api
-}
-
-migrate_legacy() {
-    if [[ -e "$CONFIG" || ! -f "$LEGACY_CONFIG" ]]; then return 0; fi
-    PYTHONPATH="$SOURCE" /usr/bin/python3 -c 'from pathlib import Path
-import sys
-from libvirt_balloon_keeper.config import migrate_legacy_config
-if migrate_legacy_config(Path(sys.argv[1]), Path(sys.argv[2])):
-    print("migrated legacy configuration")' "$LEGACY_CONFIG" "$CONFIG"
-    logger -t libvirt-balloon-keeper "migrated legacy configuration; state and audit paths preserved"
 }
 
 install_files() {
@@ -108,13 +96,12 @@ start_api() {
 }
 
 case "${1:-}" in
-    install|upgrade) migrate_legacy; install_files; check; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
-    migrate) migrate_legacy ;;
+    install|upgrade) install_files; check; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     restart) stop_api; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     rollback) rollback ;;
     stop) stop_api; [[ ! -e "$API_SOCKET" || -S "$API_SOCKET" ]] && rm -f "$API_SOCKET"; rm -f "$CRON_FRAGMENT"; "$UPDATE_CRON" ;;
     check) check ;;
     uninstall) bash "$0" stop; logger -t libvirt-balloon-keeper "stopped; configuration and state preserved" ;;
-    *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|migrate|uninstall}\n' "$0" >&2; exit 64 ;;
+    *) printf 'usage: %s {install|upgrade|start|stop|restart|rollback|check|uninstall}\n' "$0" >&2; exit 64 ;;
 esac

@@ -1,10 +1,7 @@
-"""Versioned configuration with backward-compatible single-domain loading."""
+"""Versioned multi-VM configuration loading and validation."""
 from __future__ import annotations
 
-import json
-import os
 import re
-import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -153,73 +150,6 @@ def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any], state_roots: 
     )
 
 
-def migrate_legacy_config(source: Path, destination: Path) -> bool:
-    """Translate a legacy config once; never overwrite a plugin config."""
-    if destination.exists():
-        return False
-    config = load_config(source)
-    if len(config.vms) != 1:
-        raise ValueError("legacy migration requires exactly one VM")
-    vm = config.vms[0]
-    text = """version = 1
-
-[defaults]
-min_gib = {min_gib}
-max_gib = {max_gib}
-step_mib = {step_mib}
-low_usable_percent = {low}
-high_usable_percent = {high}
-grow_samples = {grow}
-shrink_samples = {shrink}
-cooldown_seconds = {cooldown}
-stale_after_seconds = {stale}
-swap_activity_threshold = {swap}
-interval_seconds = {interval}
-
-[[vms]]
-id = {id}
-domain = {domain}
-dry_run = {dry_run}
-enabled = {enabled}
-state_file = {state}
-decision_log = {log}
-""".format(
-        min_gib=vm.policy.min_kib // KIB_PER_GIB,
-        max_gib=vm.policy.max_kib // KIB_PER_GIB,
-        step_mib=vm.policy.step_kib // 1024,
-        low=vm.policy.low_usable_percent,
-        high=vm.policy.high_usable_percent,
-        grow=vm.policy.grow_samples,
-        shrink=vm.policy.shrink_samples,
-        cooldown=vm.policy.cooldown_seconds,
-        stale=vm.policy.stale_after_seconds,
-        swap=vm.policy.swap_activity_threshold,
-        interval=vm.interval_seconds,
-        id=json.dumps(vm.id),
-        domain=json.dumps(vm.domain),
-        dry_run=str(vm.dry_run).lower(),
-        enabled=str(vm.enabled).lower(),
-        state=json.dumps(str(vm.state_file)),
-        log=json.dumps(str(vm.decision_log)),
-    )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o640)
-        os.replace(temporary, destination)
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
-    return True
-
-
 def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppConfig:
     """Load a configuration; with state_roots, every VM state/audit path must resolve under one of them."""
     try:
@@ -231,8 +161,7 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
         raise ValueError(f"unsupported configuration version: {version}")
     raw_vms = data.get("vms")
     if raw_vms is None:
-        # Legacy configuration is intentionally translated, not silently ignored.
-        raw_vms = [{"id": str(data.get("domain", "")).strip(), "domain": data.get("domain", ""), **data.get("policy", {}), **data.get("runtime", {})}]
+        raise ValueError("configuration requires a vms table")
     if not isinstance(raw_vms, list) or not raw_vms:
         raise ValueError("configuration requires at least one VM")
     if len(raw_vms) > MAX_VMS:

@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from libvirt_balloon_keeper.adapter import LibvirtError, VirshAdapter
-from libvirt_balloon_keeper.config import load_config, migrate_legacy_config
+from libvirt_balloon_keeper.config import load_config
 from libvirt_balloon_keeper.core import KIB_PER_GIB, State, Telemetry
 from libvirt_balloon_keeper.runtime import append_decision, load_state, run_schedule, run_vm_tick, save_state
 
@@ -57,30 +57,13 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(config.vms[1].enabled)
             self.assertEqual(config.vms[0].interval_seconds, 30)
 
-    def test_legacy_config_translates(self):
+    def test_legacy_config_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "legacy.toml"
             path.write_text('''domain = "example-vm"\n[policy]\nmin_gib = 3\n[runtime]\ndry_run = false\nstate_file = "/tmp/state.json"\ndecision_log = "/tmp/log.jsonl"\n''')
-            config = load_config(path)
-            self.assertEqual(config.vms[0].id, "example-vm")
-            self.assertFalse(config.vms[0].dry_run)
-            self.assertEqual(config.vms[0].policy.min_kib, 3 * KIB_PER_GIB)
+            with self.assertRaises(ValueError):
+                load_config(path)
 
-    def test_legacy_config_migrates_atomically_and_never_overwrites(self):
-        with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            source = root / "legacy.toml"
-            destination = root / "plugin" / "config.toml"
-            source.write_text('''domain = "example-vm"\n[policy]\nmin_gib = 3\nstep_mib = 256\n[runtime]\ndry_run = false\nstate_file = "/pool/state.json"\ndecision_log = "/pool/log.jsonl"\n''')
-            self.assertTrue(migrate_legacy_config(source, destination))
-            migrated = load_config(destination)
-            vm = migrated.vms[0]
-            self.assertEqual(vm.id, "example-vm")
-            self.assertFalse(vm.dry_run)
-            self.assertEqual(vm.policy.step_kib, 256 * 1024)
-            self.assertEqual(vm.state_file, Path("/pool/state.json"))
-            self.assertFalse(migrate_legacy_config(source, destination))
-            self.assertEqual(destination.stat().st_mode & 0o777, 0o640)
 
     def test_rejects_malformed_version_empty_vms_and_domain_collisions(self):
         cases = [

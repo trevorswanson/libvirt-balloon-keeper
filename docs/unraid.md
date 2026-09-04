@@ -82,22 +82,6 @@ unchanged target.
 
 ## Persistent startup hook
 
-The legacy compatibility installer adds a marked, once-per-minute root crontab
-entry. Add one line to the existing `/boot/config/go` only when using that
-legacy path:
-
-```bash
-/usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/install-cron.sh
-```
-
-The legacy installer removes and recreates only its own marked block, so running
-it repeatedly is safe and cannot create duplicate entries. Invoke the wrapper
-manually for an immediate tick without starting a daemon:
-
-```bash
-/usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/run-libvirt-balloon-keeper-cron.sh
-```
-
 The managed plugin lifecycle uses Unraid's native
 `/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper.cron`
 fragment and invokes `update_cron`; it does not splice the root crontab.
@@ -189,12 +173,10 @@ remains `dry_run = true` until deliberately changed.
 ## Plugin lifecycle preview
 
 The reviewed plugin lifecycle entrypoint is `unraid/lifecycle.sh`. It supports
-`install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, `migrate`,
-and `uninstall`.
-`install`/`upgrade` copy the controller and package modules, migrate an existing
-legacy single-domain config once when the plugin config is absent, preserve its
+`install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, and
+`uninstall`.
+`install`/`upgrade` copy the controller and package modules, preserve existing
 pool-backed state/audit paths, validate prerequisites, and install the marked cron block.
-The explicit `migrate` action performs only that non-destructive config migration.
 `stop` removes only that block. `rollback` restores the previous managed
 generation and preserves configuration/state history. `uninstall` stops
 scheduling but intentionally preserves configuration and pool-backed state for
