@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE PLUGIN [
-  <!ENTITY name "libvirt-balloon-keeper">
-  <!ENTITY version "2026.09.03">
-  <!ENTITY author "Trevor Swanson">
+  <!ENTITY name      "libvirt-balloon-keeper">
+  <!ENTITY version   "2026.09.03">
+  <!ENTITY author    "Trevor Swanson">
+  <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY plugflash "/boot/config/plugins/&name;">
+  <!ENTITY archive   "&plugflash;/&name;.tar.gz">
   <!ENTITY pluginURL "https://raw.githubusercontent.com/trevorswanson/libvirt-balloon-keeper/main/unraid/libvirt-balloon-keeper.plg">
 ]>
 <PLUGIN name="&name;" author="&author;" version="&version;" pluginURL="&pluginURL;">
@@ -10,29 +13,51 @@
     &version;
     - Pin the release payload and harden Unraid lifecycle integration.
   </CHANGES>
-  <FILE Name="/tmp/libvirt-balloon-keeper.tar.gz">
-    <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>
+
+  <!-- The manager executes FILE entries in document order. -->
+  <FILE Run="/bin/bash">
+    <INLINE>
+set -eu
+install -d -m 0750 &plugflash;
+    </INLINE>
+  </FILE>
+
+  <!--
+  The stable release asset is cached on the persistent flash device. The
+  manager verifies SHA256 before reusing it, so a changed manifest checksum
+  causes the current release to be fetched without relying on /tmp at boot.
+  -->
+  <FILE Name="&archive;">
+    <URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;.tar.gz</URL>
     <SHA256>bef54c06caa4ab82af322cf372e6c425207879909af909169f25bb6011044147</SHA256>
   </FILE>
-  <INSTALL plugin="&name;">
-    <![CDATA[
-      set -eu
-      archive="/tmp/libvirt-balloon-keeper.tar.gz"
-      rm -rf /tmp/libvirt-balloon-keeper-release
-      mkdir -p /tmp/libvirt-balloon-keeper-release
-      tar -xzf "$archive" --strip-components=1 -C /tmp/libvirt-balloon-keeper-release
-      PLUGIN_SOURCE=/tmp/libvirt-balloon-keeper-release \
-        PLUGIN_ROOT=/boot/config/plugins/libvirt-balloon-keeper \
-        EMHTTP_ROOT=/usr/local/emhttp/plugins/libvirt-balloon-keeper \
-        bash /tmp/libvirt-balloon-keeper-release/unraid/lifecycle.sh install
-      rm -rf /tmp/libvirt-balloon-keeper-release "$archive"
-    ]]>
-  </INSTALL>
-  <REMOVE plugin="&name;">
-    <![CDATA[
-      if [ -x /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh ]; then
-        bash /boot/config/plugins/libvirt-balloon-keeper/lifecycle.sh uninstall || true
-      fi
-    ]]>
-  </REMOVE>
+
+  <!--
+  Install and update action. A FILE without Method is processed by the
+  manager's install pass, including updates.
+  -->
+  <FILE Run="/bin/bash">
+    <INLINE>
+set -eu
+staging="$(mktemp -d /tmp/&name;-release.XXXXXX)"
+trap 'rm -rf "$staging"' EXIT
+tar -xzf "&archive;" --strip-components=1 -C "$staging"
+PLUGIN_SOURCE="$staging" \
+  PLUGIN_ROOT="&plugflash;" \
+  EMHTTP_ROOT="&plugdir;" \
+  bash "$staging/unraid/lifecycle.sh" install
+    </INLINE>
+  </FILE>
+
+  <!-- Removal is also a FILE action; the manager filters it by Method. -->
+  <FILE Run="/bin/bash" Method="remove">
+    <INLINE>
+set -eu
+if [ -x "&plugflash;/lifecycle.sh" ]; then
+  bash "&plugflash;/lifecycle.sh" uninstall
+fi
+rm -rf "&plugdir;"
+rm -rf "&plugflash;"
+    </INLINE>
+  </FILE>
 </PLUGIN>
