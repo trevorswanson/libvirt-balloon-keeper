@@ -27,19 +27,33 @@ def _reject_symlink(path: Path) -> None:
         raise ValueError(f"runtime path is a symlink: {path}")
 
 
+def _open_parent(path: Path) -> int:
+    """Open the runtime file's parent directory without following symlinks."""
+    _reject_symlink(path)
+    try:
+        return os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise ValueError(f"runtime path parent unavailable: {path}") from exc
+
+
 class BalloonAdapter(Protocol):
     def dommemstat(self, domain: str) -> Telemetry | dict[str, int]: ...
+    def ensure_memory_stats(self, domain: str, period_seconds: int = 10) -> bool: ...
     def setmem(self, domain: str, target_kib: int) -> None: ...
 
 
 def load_state(path: Path) -> State:
-    _reject_symlink(path)
+    parent_fd = _open_parent(path)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent_fd)
+        with os.fdopen(fd, encoding="utf-8") as handle:
+            raw = json.load(handle)
     except FileNotFoundError:
         return State()
     except (OSError, json.JSONDecodeError, TypeError) as exc:
         raise ValueError(f"invalid state file {path}") from exc
+    finally:
+        os.close(parent_fd)
     if not isinstance(raw, dict):
         raise ValueError(f"invalid state file {path}")
     fields = asdict(State())
@@ -56,25 +70,28 @@ def load_state(path: Path) -> State:
 
 
 def save_state(path: Path, state: State) -> None:
-    _reject_symlink(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    parent_fd = _open_parent(path)
     temporary: Path | None = None
+    temporary_name: str | None = None
     try:
-        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, prefix=".state-", delete=False) as handle:
-            temporary = Path(handle.name)
+        fd, temporary_name = tempfile.mkstemp(prefix=".state-", dir=path.parent)
+        temporary = Path(path.parent, temporary_name)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(asdict(state), handle, sort_keys=True)
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, path)
+        os.replace(temporary_name, path.name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
     finally:
         if temporary and temporary.exists():
             temporary.unlink()
+        os.close(parent_fd)
 
 
 def append_decision(path: Path, *, now: float, vm: VMConfig, telemetry: Telemetry | None, target: int | None, reason: str) -> None:
-    _reject_symlink(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    parent_fd = _open_parent(path)
     entry = {
         "epoch": int(now), "vm_id": vm.id, "domain": vm.domain,
         "actual_kib": telemetry.actual if telemetry else None,
@@ -83,10 +100,16 @@ def append_decision(path: Path, *, now: float, vm: VMConfig, telemetry: Telemetr
         "last_update": telemetry.last_update if telemetry else None,
         "requested_target_kib": target, "dry_run": vm.dry_run, "reason": reason,
     }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry, sort_keys=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+    try:
+        fd = os.open(path.name, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o640, dir_fd=parent_fd)
+        with os.fdopen(fd, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+    except OSError as exc:
+        raise ValueError(f"runtime audit file unavailable: {path}") from exc
+    finally:
+        os.close(parent_fd)
 
 
 def run_vm_tick(vm: VMConfig, adapter: BalloonAdapter, now: float | None = None) -> tuple[str, int | None]:
@@ -99,6 +122,9 @@ def run_vm_tick(vm: VMConfig, adapter: BalloonAdapter, now: float | None = None)
         except BlockingIOError:
             return "hold: another invocation owns the lock", None
         state = load_state(vm.state_file)
+        ensure_memory_stats = getattr(adapter, "ensure_memory_stats", None)
+        if ensure_memory_stats is not None:
+            ensure_memory_stats(vm.domain)
         telemetry_raw = adapter.dommemstat(vm.domain)
         telemetry = telemetry_raw if isinstance(telemetry_raw, Telemetry) else Telemetry.from_mapping(telemetry_raw)
         reason, target = decide(vm.policy, state, telemetry, now)

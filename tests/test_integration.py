@@ -108,7 +108,7 @@ class HealthAndUnraidTests(unittest.TestCase):
         layout = PluginLayout()
         validate_layout(layout)
         self.assertEqual(cron_entry(Path("/boot/config/plugins/x/run-once.sh")), "* * * * * /usr/bin/bash /boot/config/plugins/x/run-once.sh")
-        self.assertEqual(len(lifecycle_actions()), 9)
+        self.assertEqual(len(lifecycle_actions()), 8)
         with self.assertRaises(ValueError): cron_entry(Path("relative"))
         with self.assertRaises(ValueError): validate_layout(PluginLayout(boot_root=Path("relative")))
 
@@ -192,6 +192,13 @@ class WebTests(unittest.TestCase):
         self.assertEqual([entry["reason"] for entry in payload["entries"]], ["hold", "grow"])
         response = self.request("GET", "/api/audit?vm=unknown")
         self.assertEqual(response.status, 404)
+
+    def test_audit_reader_skips_oversized_entries(self):
+        audit = Path(self.tmp.name) / "decisions.jsonl"
+        audit.write_text('{"reason":"ok"}\n' + '{"reason":"' + ('x' * 20000) + '"}\n')
+        response = self.request("GET", "/api/audit?vm=example-vm")
+        self.assertEqual(response.status, 200)
+        self.assertEqual(len(json.loads(response.read())["entries"]), 1)
         response = self.request("GET", "/api/audit?vm=example-vm&limit=101")
         self.assertEqual(response.status, 400)
 
@@ -199,6 +206,8 @@ class WebTests(unittest.TestCase):
         page = Path(__file__).parents[1] / "unraid" / "libvirt-balloon-keeper.page"
         content = page.read_text()
         self.assertIn("/plugins/libvirt-balloon-keeper/api.php", content)
+        self.assertIn('id="lbk-state-file" data-key="state_file"', content)
+        self.assertIn('id="lbk-decision-log" data-key="decision_log"', content)
         self.assertIn('Menu="Utilities"', content)
         self.assertIn('Icon="libvirt-balloon-keeper.png"', content)
         self.assertIn("req('inventory')", content)
@@ -270,8 +279,9 @@ class WebTests(unittest.TestCase):
 
     def test_manifest_is_immutable_and_integrity_pinned(self):
         manifest = (Path(__file__).resolve().parents[1] / "unraid" / "libvirt-balloon-keeper.plg").read_text()
-        self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/libvirt-balloon-keeper.tar.gz</URL>", manifest)
-        self.assertIn("<SHA256>d8cc0253433014e5678937deb49bbb7a0cebfcb8d7894d6ba7d0c283ae154646</SHA256>", manifest)
+        self.assertIn("<URL>https://github.com/trevorswanson/libvirt-balloon-keeper/releases/download/&version;/&name;-&version;.tar.gz</URL>", manifest)
+        self.assertIn("<!ENTITY sha256    \"00770d08e0b0f3822073afe9bd5bccd0235fb75a7ac6fb458c76c6051659b193\">", manifest)
+        self.assertIn("<SHA256>&sha256;</SHA256>", manifest)
         self.assertNotIn("releases/latest", manifest)
         self.assertNotIn("curl --fail", manifest)
 

@@ -6,15 +6,28 @@ reboot. The generic systemd files in this repository are for conventional
 systemd hosts; this Unraid path uses the persistent boot device and
 `/boot/config/go`.
 
+## Storage
+
+The controller stores only its durable runtime state in the selected storage
+root: per-VM `state.json` files (sample history, cooldowns, and cumulative
+swap counters), per-VM `decisions.jsonl` audit logs, and short-lived lock files.
+The WebGUI prefers the logical `/mnt/user` share only when it is an actual
+mounted directory, then selects another mounted pool. It never creates or
+assumes a `/mnt/cache` tree or any particular pool name. If no persistent mount
+is available, newly discovered VMs cannot be saved until storage exists.
+
+An explicit `pool_root` must be a direct child of `/mnt` and an existing mount;
+the configuration validator rejects ordinary directories and paths elsewhere.
+
 ## Layout
 
 Use three locations with different jobs:
 
 | Location | Contents | Why |
 |---|---|---|
-| `/boot/config/custom/libvirt-balloon-keeper/` | `balloon_keeper.py`, `run-libvirt-balloon-keeper-cron.sh`, `install-cron.sh`, local `config.toml` | Persisted on the Unraid boot device and available during boot. Files are run through `python3`/`bash`; current Unraid boot media does not support executable bits. |
-| `/mnt/<cache-pool>/appdata/libvirt-balloon-keeper/` | `state.json`, `decisions.jsonl` | Persistent write-heavy state on a real cache pool, not on the USB boot device. Choose the actual cache-pool mount, not `/mnt/user`, so a mover operation cannot relocate an active state file. |
-| `/boot/config/go` | one cron installer line | Persisted startup hook. It idempotently recreates the cron entry after every reboot. |
+| `/boot/config/plugins/libvirt-balloon-keeper/` | Managed code, `config.toml`, scheduler fragment, and API runtime files | Persisted on the Unraid boot device and installed by `lifecycle.sh`. |
+| `/mnt/user/appdata/libvirt-balloon-keeper/` | Per-VM `state.json`, `decisions.jsonl`, and lock files | Canonical logical location on a verified user share; another verified mounted pool may be selected when unavailable. |
+| `/boot/config/go` | host startup integration | Managed by Unraid's plugin lifecycle; do not hand-edit generated cron state. |
 
 The cron wrapper runs one controller tick and exits. If the array/pool or VM is
 not ready, the tick fails closed and cron retries on the next minute; `go` never
@@ -39,23 +52,14 @@ Back up the boot device in the Unraid WebGUI before changing `config/go`:
 From a checked-out release directory on the host (or after copying reviewed
 release files to a temporary location):
 
-```bash
-install -d -m 0700 /boot/config/custom/libvirt-balloon-keeper
-install -d -m 0700 /mnt/CACHE_POOL/appdata/libvirt-balloon-keeper
-install -m 0644 balloon_keeper.py /boot/config/custom/libvirt-balloon-keeper/
-install -m 0644 unraid/run-libvirt-balloon-keeper-cron.sh /boot/config/custom/libvirt-balloon-keeper/
-install -m 0644 unraid/install-cron.sh /boot/config/custom/libvirt-balloon-keeper/
-install -m 0640 config.example.toml /boot/config/custom/libvirt-balloon-keeper/config.toml
-```
-
-Edit only the local `config.toml`. Set the real VM `domain`, retain
-`dry_run = true`, and set these paths to the physical cache pool selected above:
-
-```toml
-[runtime]
-state_file = "/mnt/CACHE_POOL/appdata/libvirt-balloon-keeper/state.json"
-decision_log = "/mnt/CACHE_POOL/appdata/libvirt-balloon-keeper/decisions.jsonl"
-```
+Install through the PLG so the lifecycle discovers and validates storage. Edit
+only the resulting local `config.toml`; set the real VM `domain` and retain
+`dry_run = true`. The WebGUI exposes separate `state_file` and `decision_log`
+fields for every VM, so users may choose other absolute persistent paths. For
+newly discovered VMs, it suggests paths beneath the verified
+`/mnt/user/appdata/libvirt-balloon-keeper` share or another verified mounted
+pool when the logical share is unavailable. The paths may be different for
+each VM and do not need to share a directory; they cannot contain `..`.
 
 Validate a one-shot dry tick before adding startup automation:
 
@@ -69,25 +73,16 @@ unchanged target.
 
 ## Persistent startup hook
 
-The legacy compatibility installer adds a marked, once-per-minute root crontab
-entry. Add one line to the existing `/boot/config/go` only when using that
-legacy path:
-
-```bash
-/usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/install-cron.sh
-```
-
-The legacy installer removes and recreates only its own marked block, so running
-it repeatedly is safe and cannot create duplicate entries. Invoke the wrapper
-manually for an immediate tick without starting a daemon:
-
-```bash
-/usr/bin/bash /boot/config/custom/libvirt-balloon-keeper/run-libvirt-balloon-keeper-cron.sh
-```
-
 The managed plugin lifecycle uses Unraid's native
 `/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper.cron`
-fragment and invokes `update_cron`; it does not splice the root crontab.
+fragment and invokes `update_cron`; it does not splice the root crontab. Because
+Unraid registers a newly installed PLG after its install actions, the installer
+also schedules one deferred `update_cron` reconciliation with `at`, which makes
+fresh direct-URL installs self-activating. This follows the workaround documented
+in [Unraid's plugin discussion](https://forums.unraid.net/topic/147111-unraid-plugin-have-plg-call-update_cron-in-prepost-setup/)
+and its [reference PLG](https://github.com/EldonMcGuinness/UnraidDriveStandbyMonitor/blob/master/DriveStandbyMonitor.plg).
+The deferred job is only for cron registration; it does not run the controller or
+change VM memory.
 
 The wrapper has a non-blocking lock, invokes exactly one controller decision,
 and exits. Cron supplies the retry boundary after failures or process death.
@@ -176,21 +171,19 @@ remains `dry_run = true` until deliberately changed.
 ## Plugin lifecycle preview
 
 The reviewed plugin lifecycle entrypoint is `unraid/lifecycle.sh`. It supports
-`install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, `migrate`,
-and `uninstall`.
-`install`/`upgrade` copy the controller and package modules, migrate an existing
-legacy single-domain config once when the plugin config is absent, preserve its
+`install`, `upgrade`, `start`, `stop`, `restart`, `rollback`, `check`, and
+`uninstall`.
+`install`/`upgrade` copy the controller and package modules, preserve existing
 pool-backed state/audit paths, validate prerequisites, and install the marked cron block.
-The explicit `migrate` action performs only that non-destructive config migration.
 `stop` removes only that block. `rollback` restores the previous managed
 generation and preserves configuration/state history. `uninstall` stops
-scheduling but intentionally preserves configuration and pool-backed state for
-rollback or migration review.
+scheduling and removes configured runtime state and audit files from the
+supported application storage roots. The package manager then removes the
+plugin directory and its configuration, rollback snapshots, and archives.
 
-The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`; the current
-live compatibility path under `/boot/config/custom` must not be overwritten by
-this preview. State and audit paths come from the configuration; the lifecycle
-does not assume or create a particular cache-pool mount. Then perform, in order:
+The plugin path is `/boot/config/plugins/libvirt-balloon-keeper`. State and
+audit paths come from the configuration; the lifecycle does not assume or
+create a particular pool mount. Then perform, in order:
 
 1. back up the Unraid boot device;
 2. install with `dry_run = true` and run `check`;

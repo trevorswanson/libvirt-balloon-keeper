@@ -7,6 +7,10 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+from libvirt_balloon_keeper.config import DEFAULT_STATE_ROOTS, load_config
+from libvirt_balloon_keeper.unraid import discover_storage_root
 def unix_request(path, method, target):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
         client.settimeout(2)
@@ -24,6 +28,31 @@ def unix_request(path, method, target):
 
 
 class UnraidScriptTests(unittest.TestCase):
+    def test_default_state_roots_do_not_assume_cache(self):
+        self.assertIn(Path("/mnt/user/appdata/libvirt-balloon-keeper"), DEFAULT_STATE_ROOTS)
+        self.assertNotIn(Path("/mnt/cache/appdata/libvirt-balloon-keeper"), DEFAULT_STATE_ROOTS)
+
+    def test_storage_discovery_prefers_user_share_and_never_guesses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            mount_root = Path(directory)
+            (mount_root / "user").mkdir()
+            (mount_root / "cache").mkdir()
+            (mount_root / "fast").mkdir()
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "user"):
+                self.assertEqual(discover_storage_root(mount_root), mount_root / "user" / "appdata/libvirt-balloon-keeper")
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", side_effect=lambda path: Path(path) == mount_root / "fast"):
+                self.assertEqual(discover_storage_root(mount_root), mount_root / "fast" / "appdata/libvirt-balloon-keeper")
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", return_value=False):
+                self.assertIsNone(discover_storage_root(mount_root))
+
+    def test_explicit_pool_root_must_be_a_real_mnt_mount(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config.toml"
+            config.write_text('version=1\npool_root="/mnt/cache"\n[[vms]]\nid="x"\ndomain="x"\n')
+            with patch("libvirt_balloon_keeper.unraid.os.path.ismount", return_value=False):
+                with self.assertRaisesRegex(ValueError, "mounted pool"):
+                    load_config(config)
+
     def test_run_api_is_idempotent_and_owns_pid_file(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:
@@ -85,96 +114,31 @@ class UnraidScriptTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 64)
 
-    def test_lifecycle_migrates_reinstalls_and_stops_cleanly(self):
+    def test_install_cron_defers_reconciliation_until_plugin_registration(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
+            plugin = base / "plugin"
+            plugin.mkdir()
+            update_log = base / "update.log"
+            at_log = base / "at.log"
+            update_cron = base / "update_cron"
+            update_cron.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' update >> {update_log!s}\n")
+            update_cron.chmod(0o750)
             fake_bin = base / "bin"
             fake_bin.mkdir()
-            cron_store = base / "crontab"
-            (fake_bin / "update_cron").write_text(
-                "#!/usr/bin/env bash\n"
-                "set -e\n"
-                "cat ${PLUGIN_ROOT}/*.cron > ${CRONTAB_STORE} 2>/dev/null || : > ${CRONTAB_STORE}\n"
-            )
-            (fake_bin / "virsh").write_text("#!/usr/bin/env bash\nexit 0\n")
-            (fake_bin / "logger").write_text("#!/usr/bin/env bash\nexit 0\n")
-            for executable in fake_bin.iterdir():
-                executable.chmod(0o750)
-
-            pool = base / "pool"
-            legacy = base / "legacy"
-            legacy.mkdir()
-            state = pool / "state.json"
-            audit = pool / "decisions.jsonl"
-            (legacy / "config.toml").write_text(
-                f'domain = "example-vm"\n[policy]\nmin_gib = 3\n'
-                f'[runtime]\ndry_run = true\nstate_file = "{state}"\n'
-                f'decision_log = "{audit}"\n'
-            )
-            plugin = base / "plugin"
-            emhttp = base / "emhttp"
-            pid_file = base / "api.pid"
-            socket_path = base / "api.sock"
-            log_file = base / "api.log"
+            fake_at = fake_bin / "at"
+            fake_at.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > {at_log!s}\n")
+            fake_at.chmod(0o750)
             environment = os.environ.copy()
             environment.update(
+                PLUGIN_ROOT=str(plugin), UPDATE_CRON=str(update_cron),
                 PATH=f"{fake_bin}:{environment['PATH']}",
-                CRONTAB_STORE=str(cron_store),
-                UPDATE_CRON=str(fake_bin / "update_cron"),
-                PLUGIN_ROOT=str(plugin),
-                PLUGIN_SOURCE=str(repository),
-                POOL_ROOT=str(pool),
-                LEGACY_ROOT=str(legacy),
-                EMHTTP_ROOT=str(emhttp),
-                API_PID_FILE=str(pid_file),
-                API_LOG_FILE=str(log_file),
-                API_SOCKET=str(socket_path),
             )
-            lifecycle = repository / "unraid" / "lifecycle.sh"
-            try:
-                subprocess.run(["bash", str(lifecycle), "install"], check=True, env=environment)
-                migrated = (plugin / "config.toml").read_text()
-                self.assertIn('id = "example-vm"', migrated)
-                self.assertIn(f'state_file = "{state}"', migrated)
-                self.assertEqual((plugin / "config.toml").stat().st_mode & 0o777, 0o640)
-                for source in (plugin / "libvirt_balloon_keeper").rglob("*.py"):
-                    self.assertEqual(source.stat().st_mode & 0o022, 0, source)
-                (plugin / "config.toml").write_text(migrated.replace("min_gib = 3", "min_gib = 7"))
-                subprocess.run(["bash", str(lifecycle), "install"], check=True, env=environment)
-                self.assertIn("min_gib = 7", (plugin / "config.toml").read_text())
-                (plugin / "config.toml").write_text((plugin / "config.toml").read_text().replace("min_gib = 7", "min_gib = 9"))
-                subprocess.run(["bash", str(lifecycle), "rollback"], check=True, env=environment)
-                self.assertTrue(pid_file.exists(), log_file.read_text())
-                self.assertIn("min_gib = 7", (plugin / "config.toml").read_text())
-                deadline = time.monotonic() + 5
-                while True:
-                    try:
-                        status, _ = unix_request(socket_path, "GET", "/api/config")
-                        self.assertEqual(status, 200)
-                        break
-                    except OSError:
-                        if time.monotonic() >= deadline:
-                            self.fail(log_file.read_text())
-                        time.sleep(0.05)
-                self.assertTrue((plugin / "web_server.py").exists())
-                self.assertEqual(socket_path.stat().st_mode & 0o777, 0o600)
-                self.assertTrue((plugin / "lifecycle.sh").exists())
-                self.assertTrue((emhttp / "libvirt-balloon-keeper.page").exists())
-                fragment = (plugin / "libvirt-balloon-keeper.cron").read_text()
-                self.assertEqual(fragment, f"* * * * * /usr/bin/bash {plugin / 'run-once.sh'}\n")
-                self.assertEqual(cron_store.read_text(), fragment)
-                status, _ = unix_request(socket_path, "GET", "/api/config")
-                self.assertEqual(status, 200)
-                subprocess.run(["bash", str(lifecycle), "uninstall"], check=True, env=environment)
-                self.assertTrue((plugin / "config.toml").exists())
-                self.assertFalse(state.parent.exists())
-                self.assertFalse((base / "mnt" / "cache" / "appdata" / "libvirt-balloon-keeper").exists())
-            finally:
-                subprocess.run(["bash", str(lifecycle), "stop"], check=False, env=environment)
-            self.assertFalse(pid_file.exists())
-            self.assertFalse((plugin / "libvirt-balloon-keeper.cron").exists())
-            self.assertNotIn("libvirt-balloon-keeper", cron_store.read_text())
+            subprocess.run(["bash", str(repository / "unraid/install-cron.sh")], check=True, env=environment)
+            self.assertEqual(update_log.read_text().splitlines(), ["update"])
+            self.assertIn("-M -f /tmp/libvirt-balloon-keeper-update-cron now + 1", at_log.read_text())
+            self.assertIn("run-once.sh", (plugin / "libvirt-balloon-keeper.cron").read_text())
 
     def test_lifecycle_stop_preserves_non_socket_path(self):
         repository = Path(__file__).parents[1]

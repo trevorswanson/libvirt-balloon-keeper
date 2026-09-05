@@ -7,6 +7,26 @@ ROOT="${PLUGIN_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)}"
 WRAPPER="${ROOT}/run-once.sh"
 FRAGMENT="${ROOT}/libvirt-balloon-keeper.cron"
 UPDATE_CRON="${UPDATE_CRON:-/usr/local/sbin/update_cron}"
+RECONCILE_SCRIPT="/tmp/libvirt-balloon-keeper-update-cron"
 printf '%s\n' "* * * * * /usr/bin/bash $WRAPPER" >"$FRAGMENT"
 "$UPDATE_CRON"
+# Unraid registers the PLG in /var/log/plugins after its FILE actions run.
+# This is the documented race/workaround discussed by Unraid users here:
+# https://forums.unraid.net/topic/147111-unraid-plugin-have-plg-call-update_cron-in-prepost-setup/
+# Reference implementation (the thread's linked example):
+# https://github.com/EldonMcGuinness/UnraidDriveStandbyMonitor/blob/master/DriveStandbyMonitor.plg
+# The thread's accepted fix is `at ... now + 1`; defer one reconciliation so
+# update_cron can discover the new registry entry.
+cat >"$RECONCILE_SCRIPT" <<EOF
+#!/usr/bin/env bash
+set -eu
+"$UPDATE_CRON"
+rm -f -- "$RECONCILE_SCRIPT"
+EOF
+chmod 0700 "$RECONCILE_SCRIPT"
+if command -v at >/dev/null 2>&1; then
+    at -M -f "$RECONCILE_SCRIPT" now + 1 >/dev/null 2>&1 || true
+else
+    (sleep 2; "$RECONCILE_SCRIPT") >/dev/null 2>&1 &
+fi
 logger -t libvirt-balloon-keeper 'installed one-shot cron schedule'
