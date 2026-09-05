@@ -114,6 +114,32 @@ class UnraidScriptTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 64)
 
+    def test_install_cron_defers_reconciliation_until_plugin_registration(self):
+        repository = Path(__file__).parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            plugin = base / "plugin"
+            plugin.mkdir()
+            update_log = base / "update.log"
+            at_log = base / "at.log"
+            update_cron = base / "update_cron"
+            update_cron.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' update >> {update_log!s}\n")
+            update_cron.chmod(0o750)
+            fake_bin = base / "bin"
+            fake_bin.mkdir()
+            fake_at = fake_bin / "at"
+            fake_at.write_text(f"#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" > {at_log!s}\n")
+            fake_at.chmod(0o750)
+            environment = os.environ.copy()
+            environment.update(
+                PLUGIN_ROOT=str(plugin), UPDATE_CRON=str(update_cron),
+                PATH=f"{fake_bin}:{environment['PATH']}",
+            )
+            subprocess.run(["bash", str(repository / "unraid/install-cron.sh")], check=True, env=environment)
+            self.assertEqual(update_log.read_text().splitlines(), ["update"])
+            self.assertIn("-M -f /tmp/libvirt-balloon-keeper-update-cron now + 1", at_log.read_text())
+            self.assertIn("run-once.sh", (plugin / "libvirt-balloon-keeper.cron").read_text())
+
     def test_lifecycle_stop_preserves_non_socket_path(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:

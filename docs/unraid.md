@@ -75,7 +75,11 @@ unchanged target.
 
 The managed plugin lifecycle uses Unraid's native
 `/boot/config/plugins/libvirt-balloon-keeper/libvirt-balloon-keeper.cron`
-fragment and invokes `update_cron`; it does not splice the root crontab.
+fragment and invokes `update_cron`; it does not splice the root crontab. Because
+Unraid registers a newly installed PLG after its install actions, the installer
+also schedules one deferred `update_cron` reconciliation with `at`, which makes
+fresh direct-URL installs self-activating. The deferred job is only for cron
+registration; it does not run the controller or change VM memory.
 
 The wrapper has a non-blocking lock, invokes exactly one controller decision,
 and exits. Cron supplies the retry boundary after failures or process death.
