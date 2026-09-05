@@ -38,6 +38,7 @@ def _open_parent(path: Path) -> int:
 
 class BalloonAdapter(Protocol):
     def dommemstat(self, domain: str) -> Telemetry | dict[str, int]: ...
+    def ensure_memory_stats(self, domain: str, period_seconds: int = 10) -> bool: ...
     def setmem(self, domain: str, target_kib: int) -> None: ...
 
 
@@ -121,6 +122,9 @@ def run_vm_tick(vm: VMConfig, adapter: BalloonAdapter, now: float | None = None)
         except BlockingIOError:
             return "hold: another invocation owns the lock", None
         state = load_state(vm.state_file)
+        ensure_memory_stats = getattr(adapter, "ensure_memory_stats", None)
+        if ensure_memory_stats is not None:
+            ensure_memory_stats(vm.domain)
         telemetry_raw = adapter.dommemstat(vm.domain)
         telemetry = telemetry_raw if isinstance(telemetry_raw, Telemetry) else Telemetry.from_mapping(telemetry_raw)
         reason, target = decide(vm.policy, state, telemetry, now)

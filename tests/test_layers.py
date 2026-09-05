@@ -138,7 +138,34 @@ class AdapterTests(unittest.TestCase):
         with self.assertRaises(LibvirtError):
             VirshAdapter(run=run, sleep=lambda _: None, readback_timeout_seconds=0).setmem("example-vm", 10)
 
-    def test_command_failure_and_invalid_domain_are_bounded(self):
+    def test_memory_stats_period_is_detected_and_enabled_when_missing(self):
+        calls = []
+
+        def run(command, **kwargs):
+            calls.append(command)
+            if command[1] == "dumpxml":
+                return type("Result", (), {"returncode": 0, "stdout": "<domain><devices><memballoon model='virtio'><stats period='10'/></memballoon></devices></domain>", "stderr": ""})()
+            return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        adapter = VirshAdapter(run=run)
+        self.assertEqual(adapter.memory_stats_period("example-vm"), 10)
+        self.assertFalse(adapter.ensure_memory_stats("example-vm"))
+        self.assertEqual(calls, [["virsh", "dumpxml", "example-vm"],
+                                 ["virsh", "dumpxml", "example-vm"]])
+
+        calls.clear()
+
+        def missing(command, **kwargs):
+            calls.append(command)
+            if command[1] == "dumpxml":
+                return type("Result", (), {"returncode": 0, "stdout": "<memballoon model='virtio'/>", "stderr": ""})()
+            return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        adapter = VirshAdapter(run=missing)
+        self.assertIsNone(adapter.memory_stats_period("example-vm"))
+        self.assertTrue(adapter.ensure_memory_stats("example-vm", period_seconds=15))
+        self.assertEqual(calls[-1], ["virsh", "dommemstat", "example-vm", "--period", "15", "--live", "--config"])
+
         def fail(command, **kwargs):
             return type("Result", (), {"returncode": 1, "stdout": "secret", "stderr": "secret"})()
         with self.assertRaisesRegex(LibvirtError, "operation failed"):
