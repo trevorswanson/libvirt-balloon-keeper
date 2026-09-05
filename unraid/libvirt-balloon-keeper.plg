@@ -3,7 +3,7 @@
   <!ENTITY name      "libvirt-balloon-keeper">
   <!ENTITY version "2026.09.03">
   <!ENTITY author    "Trevor Swanson">
-  <!ENTITY sha256    "96797f94ab6b7ed0cfdbd777afcd4929f2f40d85e2582b4036f8ba347f853e19">
+  <!ENTITY sha256    "00770d08e0b0f3822073afe9bd5bccd0235fb75a7ac6fb458c76c6051659b193">
   <!ENTITY plugdir   "/usr/local/emhttp/plugins/&name;">
   <!ENTITY plugflash "/boot/config/plugins/&name;">
   <!ENTITY archive   "&plugflash;/&name;-&version;.tar.gz">

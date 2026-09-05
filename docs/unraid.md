@@ -78,8 +78,11 @@ The managed plugin lifecycle uses Unraid's native
 fragment and invokes `update_cron`; it does not splice the root crontab. Because
 Unraid registers a newly installed PLG after its install actions, the installer
 also schedules one deferred `update_cron` reconciliation with `at`, which makes
-fresh direct-URL installs self-activating. The deferred job is only for cron
-registration; it does not run the controller or change VM memory.
+fresh direct-URL installs self-activating. This follows the workaround documented
+in [Unraid's plugin discussion](https://forums.unraid.net/topic/147111-unraid-plugin-have-plg-call-update_cron-in-prepost-setup/)
+and its [reference PLG](https://github.com/EldonMcGuinness/UnraidDriveStandbyMonitor/blob/master/DriveStandbyMonitor.plg).
+The deferred job is only for cron registration; it does not run the controller or
+change VM memory.
 
 The wrapper has a non-blocking lock, invokes exactly one controller decision,
 and exits. Cron supplies the retry boundary after failures or process death.
