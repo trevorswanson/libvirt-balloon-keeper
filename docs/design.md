@@ -96,8 +96,8 @@ Unraid lifecycle / cron / WebGUI
 ```
 
 `libvirt_balloon_keeper.core` contains only typed telemetry, state, and pure
-policy decisions. `config` validates versioned multi-VM TOML and translates the
-legacy single-domain file. `adapter` bounds `virsh` calls and verifies a live
+policy decisions. `config` validates versioned multi-VM TOML. `adapter` bounds
+`virsh` calls and verifies a live
 mutation by reading the target back. `runtime` owns per-VM locks, atomic state,
 audit records, and failure isolation. `unraid` describes persistent storage and
 safe lifecycle actions. `web` is loopback-only and validates configuration before

@@ -2,6 +2,8 @@ version = 1
 
 # Copy this file to the Unraid plugin configuration path and edit locally.
 # Use a physical persistent pool for state/logs; never commit that deployment file.
+# On Unraid, the UI derives pool_root from an actually mounted /mnt/<pool>.
+# Do not set it to a directory that merely exists: the controller will refuse it.
 
 [defaults]
 min_gib = 4

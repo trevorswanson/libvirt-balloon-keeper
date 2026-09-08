@@ -40,20 +40,26 @@ jobs:
           python-version: '3.11'
       - name: Build package twice
         run: |
-          VERSION=0.1.0 bash unraid/build-package.sh "$RUNNER_TEMP/build-a"
-          VERSION=0.1.0 bash unraid/build-package.sh "$RUNNER_TEMP/build-b"
-          cmp "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-0.1.0.tar.gz" \
-              "$RUNNER_TEMP/build-b/libvirt-balloon-keeper-0.1.0.tar.gz"
-          sha256sum -c "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-0.1.0.tar.gz.sha256"
+          VERSION="$(sed -n 's/.*<!ENTITY version "\([^"]*\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          VERSION="$VERSION" bash unraid/build-package.sh "$RUNNER_TEMP/build-a"
+          VERSION="$VERSION" bash unraid/build-package.sh "$RUNNER_TEMP/build-b"
+          cmp "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz" \
+              "$RUNNER_TEMP/build-b/libvirt-balloon-keeper-${VERSION}.tar.gz"
+          sha256sum -c "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz.sha256"
+          ACTUAL="$(sha256sum "$RUNNER_TEMP/build-a/libvirt-balloon-keeper-${VERSION}.tar.gz" | cut -d' ' -f1)"
+          EXPECTED="$(sed -n 's/.*<!ENTITY sha256[[:space:]]*"\([0-9a-f]\{64\}\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          printf 'manifest checksum: %s\nbuilt checksum: %s\n' "$EXPECTED" "$ACTUAL"
+          test -n "$EXPECTED" && test "$ACTUAL" = "$EXPECTED"
           mkdir -p dist
           cp "$RUNNER_TEMP/build-a"/* dist/
       - name: Inspect package contents
         run: |
-          tar -tzf dist/libvirt-balloon-keeper-0.1.0.tar.gz
-          ! tar -tzf dist/libvirt-balloon-keeper-0.1.0.tar.gz | grep -E '(__pycache__/|\.pyc$)'
+          VERSION="$(sed -n 's/.*<!ENTITY version "\([^"]*\)".*/\1/p' unraid/libvirt-balloon-keeper.plg)"
+          tar -tzf "dist/libvirt-balloon-keeper-${VERSION}.tar.gz"
+          ! tar -tzf "dist/libvirt-balloon-keeper-${VERSION}.tar.gz" | grep -E '(__pycache__/|\.pyc$)'
       - name: Upload package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: libvirt-balloon-keeper-0.1.0
+          name: libvirt-balloon-keeper-package
           path: dist/*
           if-no-files-found: error
