@@ -137,7 +137,7 @@ class UnraidScriptTests(unittest.TestCase):
             )
             subprocess.run(["bash", str(repository / "unraid/install-cron.sh")], check=True, env=environment)
             self.assertEqual(update_log.read_text().splitlines(), ["update"])
-            self.assertIn("-M -f /tmp/libvirt-balloon-keeper-update-cron now + 1", at_log.read_text())
+            self.assertIn("-M -f /tmp/libvirt-balloon-keeper-update-cron now + 1 minute", at_log.read_text())
             self.assertIn("run-once.sh", (plugin / "libvirt-balloon-keeper.cron").read_text())
 
     def test_lifecycle_stop_preserves_non_socket_path(self):

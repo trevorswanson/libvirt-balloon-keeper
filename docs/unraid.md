@@ -78,7 +78,9 @@ The managed plugin lifecycle uses Unraid's native
 fragment and invokes `update_cron`; it does not splice the root crontab. Because
 Unraid registers a newly installed PLG after its install actions, the installer
 also schedules one deferred `update_cron` reconciliation with `at`, which makes
-fresh direct-URL installs self-activating. This follows the workaround documented
+fresh direct-URL installs self-activating. The installer uses the equivalent
+portable command `at -M -f <script> now + 1 minute`; Defiant's `at(1)` rejects
+the forum shorthand `now + 1` without the unit. This follows the workaround documented
 in [Unraid's plugin discussion](https://forums.unraid.net/topic/147111-unraid-plugin-have-plg-call-update_cron-in-prepost-setup/)
 and its [reference PLG](https://github.com/EldonMcGuinness/UnraidDriveStandbyMonitor/blob/master/DriveStandbyMonitor.plg).
 The deferred job is only for cron registration; it does not run the controller or

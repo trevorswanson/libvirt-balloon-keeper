@@ -15,8 +15,9 @@ printf '%s\n' "* * * * * /usr/bin/bash $WRAPPER" >"$FRAGMENT"
 # https://forums.unraid.net/topic/147111-unraid-plugin-have-plg-call-update_cron-in-prepost-setup/
 # Reference implementation (the thread's linked example):
 # https://github.com/EldonMcGuinness/UnraidDriveStandbyMonitor/blob/master/DriveStandbyMonitor.plg
-# The thread's accepted fix is `at ... now + 1`; defer one reconciliation so
-# update_cron can discover the new registry entry.
+# The thread's accepted fix is `at ... now + 1`; Defiant's at(1) requires
+# the unit, so use the equivalent portable form `now + 1 minute`. Defer one
+# reconciliation so update_cron can discover the new registry entry.
 cat >"$RECONCILE_SCRIPT" <<EOF
 #!/usr/bin/env bash
 set -eu
@@ -25,7 +26,10 @@ rm -f -- "$RECONCILE_SCRIPT"
 EOF
 chmod 0700 "$RECONCILE_SCRIPT"
 if command -v at >/dev/null 2>&1; then
-    at -M -f "$RECONCILE_SCRIPT" now + 1 >/dev/null 2>&1 || true
+    if ! at -M -f "$RECONCILE_SCRIPT" now + 1 minute >/dev/null 2>&1; then
+        logger -t libvirt-balloon-keeper 'at deferred cron reconciliation failed; using fallback'
+        (sleep 2; "$RECONCILE_SCRIPT") >/dev/null 2>&1 &
+    fi
 else
     (sleep 2; "$RECONCILE_SCRIPT") >/dev/null 2>&1 &
 fi
