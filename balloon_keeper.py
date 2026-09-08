@@ -68,9 +68,9 @@ def main() -> int:
                         help="absolute Unraid notify command; enables health alerts")
     args = parser.parse_args()
     try:
-        config = load_config(args.config)
         if args.check_config:
-            print(f"configuration valid for domain {config.domain!r}; dry_run={config.dry_run}")
+            config = load_app_config(args.config)
+            print(f"configuration valid for {len(config.vms)} configured VM(s)")
             return 0
         app = load_app_config(args.config)
         notifier = UnraidNotifier(args.notify_command) if args.notify_command else None
