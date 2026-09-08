@@ -114,6 +114,11 @@ class UnraidScriptTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 64)
 
+    def test_lifecycle_check_uses_multi_vm_config_validator(self):
+        lifecycle = (Path(__file__).parents[1] / "unraid" / "lifecycle.sh").read_text()
+        self.assertIn("from libvirt_balloon_keeper.config import load_config", lifecycle)
+        self.assertNotIn("--check-config", lifecycle)
+
     def test_install_cron_defers_reconciliation_until_plugin_registration(self):
         repository = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as directory:
