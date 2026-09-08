@@ -157,6 +157,7 @@ def run_schedule(config: AppConfig, adapter: BalloonAdapter, now: float | None =
             health = classify("disabled")
         else:
             try:
+                vm.state_file.parent.mkdir(parents=True, exist_ok=True)
                 prior_state = load_state(vm.state_file)
                 if prior_state.last_success_epoch > 0 and now < prior_state.last_success_epoch + vm.interval_seconds:
                     results[vm.id] = "hold: interval not elapsed"

@@ -214,6 +214,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertIn("bad", result)
             self.assertTrue(good.decision_log.exists())
 
+    def test_schedule_creates_missing_state_parent_on_first_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            from libvirt_balloon_keeper.config import AppConfig
+            vm = vm_config(Path(d) / "nested", "first")
+            result = run_schedule(AppConfig(1, (vm,)), FakeAdapter(), NOW)
+            self.assertNotIn("error:", result["first"])
+            self.assertTrue(vm.state_file.exists())
+            self.assertTrue(vm.decision_log.exists())
+
     def test_live_and_dry_run_paths_and_lock_contention(self):
         with tempfile.TemporaryDirectory() as d:
             tmp = Path(d)
