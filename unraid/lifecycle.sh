@@ -74,7 +74,7 @@ check() {
     command -v virsh >/dev/null
     command -v flock >/dev/null
     [[ -f "$CONFIG" ]]
-    /usr/bin/env PYTHONPATH="$ROOT" /usr/bin/python3 -c 'import sys; from libvirt_balloon_keeper.config import load_config; load_config(sys.argv[1])' "$CONFIG"
+    /usr/bin/env PYTHONPATH="$ROOT" /usr/bin/python3 -c 'import sys; from pathlib import Path; from libvirt_balloon_keeper.config import load_config; load_config(Path(sys.argv[1]))' "$CONFIG"
 }
 
 stop_api() {
