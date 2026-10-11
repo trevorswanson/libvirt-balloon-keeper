@@ -20,6 +20,7 @@ from .adapter import LibvirtError, VirshAdapter
 from .config import DEFAULT_STATE_ROOTS, AppConfig, VMConfig, load_config
 from .core import KIB_PER_GIB
 from .runtime import load_state
+from .unraid import discover_storage_root
 
 
 class ThreadingUnixHTTPServer(ThreadingMixIn, UnixStreamServer):
@@ -44,6 +45,7 @@ def _vm_payload(vm: VMConfig, state=None, telemetry=None, capability=None, error
             "low_usable_percent": p.low_usable_percent, "high_usable_percent": p.high_usable_percent,
             "grow_samples": p.grow_samples, "shrink_samples": p.shrink_samples,
             "cooldown_seconds": p.cooldown_seconds, "stale_after_seconds": p.stale_after_seconds,
+            "grow_cooldown_seconds": p.grow_cooldown_seconds,
             "swap_activity_threshold": p.swap_activity_threshold,
             "state_file": str(vm.state_file), "decision_log": str(vm.decision_log),
             "last_success_epoch": state.last_success_epoch if state else None,
@@ -73,6 +75,8 @@ def status_payload(config: AppConfig, results: dict[str, str] | None = None, ada
 def inventory_payload(config: AppConfig, adapter=None) -> dict:
     adapter = adapter or VirshAdapter()
     configured = {vm.domain: vm for vm in config.vms}
+    storage_root = config.pool_root / "appdata/libvirt-balloon-keeper" if config.pool_root else discover_storage_root()
+    storage_mount = config.pool_root or (storage_root.parent.parent if storage_root else None)
     try:
         domains = adapter.list_domains()
     except LibvirtError as exc:
@@ -86,9 +90,10 @@ def inventory_payload(config: AppConfig, adapter=None) -> dict:
                     "max_kib": 16 * KIB_PER_GIB, "step_kib": 512 * 1024,
                     "low_usable_percent": 20, "high_usable_percent": 60,
                     "grow_samples": 2, "shrink_samples": 20, "cooldown_seconds": 300,
+                    "grow_cooldown_seconds": None,
                     "stale_after_seconds": 45, "swap_activity_threshold": 64 * 1024,
-                    "state_file": f"/mnt/cache/appdata/libvirt-balloon-keeper/{domain}/state.json",
-                    "decision_log": f"/mnt/cache/appdata/libvirt-balloon-keeper/{domain}/decisions.jsonl",
+                    "state_file": str(storage_root / domain / "state.json") if storage_root else "",
+                    "decision_log": str(storage_root / domain / "decisions.jsonl") if storage_root else "",
                     "virtio_balloon": None, "telemetry": None, "power_state": None, "error": None}
         else:
             item = status_payload(AppConfig(config.version, (vm,)))["vms"][0]
@@ -122,7 +127,7 @@ def inventory_payload(config: AppConfig, adapter=None) -> dict:
             item = status_payload(AppConfig(config.version, (vm,)))["vms"][0]
             item["error"] = "domain not found"
             items.append(item)
-    return {"version": config.version, "vms": items, "inventory_error": None}
+    return {"version": config.version, "pool_root": str(storage_mount or ""), "vms": items, "inventory_error": None}
 
 
 def _toml_string(value: str) -> str:
@@ -133,6 +138,10 @@ def config_from_payload(payload: dict) -> str:
     if not isinstance(payload, dict) or not isinstance(payload.get("vms"), list) or not payload["vms"]:
         raise ValueError("configuration requires at least one VM")
     lines = ["version = 1", ""]
+    if payload.get("pool_root"):
+        if not isinstance(payload["pool_root"], str):
+            raise ValueError("pool_root must be a string")
+        lines += [f"pool_root = {_toml_string(payload['pool_root'])}", ""]
     for raw in payload["vms"]:
         if not isinstance(raw, dict):
             raise ValueError("each VM must be an object")
@@ -147,8 +156,11 @@ def config_from_payload(payload: dict) -> str:
                   ("step_kib", "step_mib"), ("low_usable_percent", "low_usable_percent"),
                   ("high_usable_percent", "high_usable_percent"), ("grow_samples", "grow_samples"),
                   ("shrink_samples", "shrink_samples"), ("cooldown_seconds", "cooldown_seconds"),
+                  ("grow_cooldown_seconds", "grow_cooldown_seconds"),
                   ("stale_after_seconds", "stale_after_seconds"), ("swap_activity_threshold", "swap_activity_threshold"))
         for source, target in fields:
+            if source == "grow_cooldown_seconds" and raw.get(source) is None:
+                continue
             if source in raw:
                 value = raw[source]
                 if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"{source} must be integer")
@@ -162,10 +174,15 @@ def config_from_payload(payload: dict) -> str:
     return "\n".join(lines)
 
 
+MAX_AUDIT_LINE_BYTES = 16 * 1024
+MAX_RESPONSE_BYTES = 1024 * 1024
+
+
 def read_audit(path: Path, limit: int = 50) -> list[dict]:
     if not 1 <= limit <= 100: raise ValueError("audit limit must be between 1 and 100")
     try:
-        with path.open(encoding="utf-8") as handle: lines = deque(handle, maxlen=limit)
+        with path.open(encoding="utf-8") as handle:
+            lines = deque((line for line in handle if len(line.encode("utf-8")) <= MAX_AUDIT_LINE_BYTES), maxlen=limit)
     except FileNotFoundError: return []
     except OSError as exc: raise ValueError("audit log unavailable") from exc
     entries = []
@@ -189,13 +206,17 @@ def state_roots_for(config: AppConfig) -> tuple[Path, ...]:
 def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None,
                   state_roots: tuple[Path, ...] | None = None,
                   socket_path: Path | None = None) -> Union[ThreadingHTTPServer, ThreadingUnixHTTPServer]:
-    config = load_config(config_path)
+    # Installation precedes array mounts. The read-only API may start then;
+    # controller loads and every submitted configuration still require mounts.
+    config = load_config(config_path, require_mounted_pool=False)
     # Anything on the loopback interface can POST a configuration, so the paths
     # it names are confined to the state directories the on-disk config allows.
     if state_roots is None: state_roots = state_roots_for(config)
     config_lock = threading.Lock()
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status, body, content_type="application/json"):
+            if len(body) > MAX_RESPONSE_BYTES:
+                self.send_error(503, "response too large"); return
             self.send_response(status); self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
         def do_GET(self):  # noqa: N802

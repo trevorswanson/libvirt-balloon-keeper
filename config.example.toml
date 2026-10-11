@@ -2,6 +2,8 @@ version = 1
 
 # Copy this file to the Unraid plugin configuration path and edit locally.
 # Use a physical persistent pool for state/logs; never commit that deployment file.
+# On Unraid, the UI derives pool_root from an actually mounted /mnt/<pool>.
+# Do not set it to a directory that merely exists: the controller will refuse it.
 
 [defaults]
 min_gib = 4
@@ -12,6 +14,8 @@ high_usable_percent = 60
 grow_samples = 2
 shrink_samples = 20
 cooldown_seconds = 300
+# Optional pressure-growth override; omit to retain the shared cooldown.
+# grow_cooldown_seconds = 60
 stale_after_seconds = 45
 swap_activity_threshold = 65536
 interval_seconds = 60

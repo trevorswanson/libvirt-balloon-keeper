@@ -35,6 +35,7 @@ def load_config(path: Path) -> Config:
                   step_kib=vm.policy.step_kib, low_usable_percent=vm.policy.low_usable_percent,
                   high_usable_percent=vm.policy.high_usable_percent, grow_samples=vm.policy.grow_samples,
                   shrink_samples=vm.policy.shrink_samples, cooldown_seconds=vm.policy.cooldown_seconds,
+                  grow_cooldown_seconds=vm.policy.grow_cooldown_seconds,
                   stale_after_seconds=vm.policy.stale_after_seconds,
                   swap_activity_threshold=vm.policy.swap_activity_threshold, dry_run=vm.dry_run,
                   state_file=vm.state_file, decision_log=vm.decision_log)
@@ -68,9 +69,9 @@ def main() -> int:
                         help="absolute Unraid notify command; enables health alerts")
     args = parser.parse_args()
     try:
-        config = load_config(args.config)
         if args.check_config:
-            print(f"configuration valid for domain {config.domain!r}; dry_run={config.dry_run}")
+            config = load_app_config(args.config)
+            print(f"configuration valid for {len(config.vms)} configured VM(s)")
             return 0
         app = load_app_config(args.config)
         notifier = UnraidNotifier(args.notify_command) if args.notify_command else None

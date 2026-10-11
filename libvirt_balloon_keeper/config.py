@@ -1,10 +1,7 @@
-"""Versioned configuration with backward-compatible single-domain loading."""
+"""Versioned multi-VM configuration loading and validation."""
 from __future__ import annotations
 
-import json
-import os
 import re
-import tempfile
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +14,7 @@ from .core import KIB_PER_GIB, PolicyConfig
 DEFAULT_STATE_ROOTS: tuple[Path, ...] = (
     Path("/var/lib/libvirt-balloon-keeper"),
     Path("/var/log/libvirt-balloon-keeper"),
-    Path("/mnt/cache/appdata/libvirt-balloon-keeper"),
+    Path("/mnt/user/appdata/libvirt-balloon-keeper"),
 )
 MAX_VMS = 128
 MAX_NAME_LENGTH = 128
@@ -72,6 +69,7 @@ def _policy(data: dict[str, Any]) -> PolicyConfig:
         grow_samples=_int(data, "grow_samples", 2),
         shrink_samples=_int(data, "shrink_samples", 20),
         cooldown_seconds=_int(data, "cooldown_seconds", 300),
+        grow_cooldown_seconds=_int(data, "grow_cooldown_seconds", 300) if "grow_cooldown_seconds" in data else None,
         stale_after_seconds=_int(data, "stale_after_seconds", 45),
         swap_activity_threshold=_int(data, "swap_activity_threshold", 64 * 1024),
     )
@@ -95,6 +93,8 @@ def validate_policy(policy: PolicyConfig) -> None:
         raise ValueError("timing values are too large")
     if policy.swap_activity_threshold > 2**63:
         raise ValueError("swap_activity_threshold is too large")
+    if policy.grow_cooldown_seconds is not None and not 0 < policy.grow_cooldown_seconds <= MAX_INTERVAL_SECONDS:
+        raise ValueError("grow_cooldown_seconds must be positive and no larger than the timing limit")
 
 
 def _path(value: Any, name: str) -> Path:
@@ -153,74 +153,7 @@ def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any], state_roots: 
     )
 
 
-def migrate_legacy_config(source: Path, destination: Path) -> bool:
-    """Translate a legacy config once; never overwrite a plugin config."""
-    if destination.exists():
-        return False
-    config = load_config(source)
-    if len(config.vms) != 1:
-        raise ValueError("legacy migration requires exactly one VM")
-    vm = config.vms[0]
-    text = """version = 1
-
-[defaults]
-min_gib = {min_gib}
-max_gib = {max_gib}
-step_mib = {step_mib}
-low_usable_percent = {low}
-high_usable_percent = {high}
-grow_samples = {grow}
-shrink_samples = {shrink}
-cooldown_seconds = {cooldown}
-stale_after_seconds = {stale}
-swap_activity_threshold = {swap}
-interval_seconds = {interval}
-
-[[vms]]
-id = {id}
-domain = {domain}
-dry_run = {dry_run}
-enabled = {enabled}
-state_file = {state}
-decision_log = {log}
-""".format(
-        min_gib=vm.policy.min_kib // KIB_PER_GIB,
-        max_gib=vm.policy.max_kib // KIB_PER_GIB,
-        step_mib=vm.policy.step_kib // 1024,
-        low=vm.policy.low_usable_percent,
-        high=vm.policy.high_usable_percent,
-        grow=vm.policy.grow_samples,
-        shrink=vm.policy.shrink_samples,
-        cooldown=vm.policy.cooldown_seconds,
-        stale=vm.policy.stale_after_seconds,
-        swap=vm.policy.swap_activity_threshold,
-        interval=vm.interval_seconds,
-        id=json.dumps(vm.id),
-        domain=json.dumps(vm.domain),
-        dry_run=str(vm.dry_run).lower(),
-        enabled=str(vm.enabled).lower(),
-        state=json.dumps(str(vm.state_file)),
-        log=json.dumps(str(vm.decision_log)),
-    )
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    fd, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", dir=destination.parent)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o640)
-        os.replace(temporary, destination)
-    except BaseException:
-        try:
-            os.unlink(temporary)
-        except FileNotFoundError:
-            pass
-        raise
-    return True
-
-
-def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppConfig:
+def load_config(path: Path, state_roots: tuple[Path, ...] | None = None, *, require_mounted_pool: bool = True) -> AppConfig:
     """Load a configuration; with state_roots, every VM state/audit path must resolve under one of them."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -231,8 +164,7 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
         raise ValueError(f"unsupported configuration version: {version}")
     raw_vms = data.get("vms")
     if raw_vms is None:
-        # Legacy configuration is intentionally translated, not silently ignored.
-        raw_vms = [{"id": str(data.get("domain", "")).strip(), "domain": data.get("domain", ""), **data.get("policy", {}), **data.get("runtime", {})}]
+        raise ValueError("configuration requires a vms table")
     if not isinstance(raw_vms, list) or not raw_vms:
         raise ValueError("configuration requires at least one VM")
     if len(raw_vms) > MAX_VMS:
@@ -252,4 +184,8 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
     if any(vm.interval_seconds <= 0 or vm.interval_seconds > MAX_INTERVAL_SECONDS for vm in vms):
         raise ValueError(f"interval_seconds must be between 1 and {MAX_INTERVAL_SECONDS}")
     pool_root = data.get("pool_root")
-    return AppConfig(version=version, vms=vms, pool_root=_path(pool_root, "pool_root") if pool_root is not None else None)
+    selected_pool = _path(pool_root, "pool_root") if pool_root is not None else None
+    if selected_pool is not None:
+        from .unraid import validate_pool_root
+        validate_pool_root(selected_pool, require_mounted=require_mounted_pool)
+    return AppConfig(version=version, vms=vms, pool_root=selected_pool)

@@ -1,6 +1,7 @@
 """Narrow, injectable libvirt command adapter."""
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from collections.abc import Callable
@@ -60,6 +61,22 @@ class VirshAdapter:
     def supports_virtio_balloon(self, domain: str) -> bool:
         xml = self._call("dumpxml", domain)
         return "<memballoon" in xml and "model='virtio'" in xml or 'model="virtio"' in xml
+
+    def memory_stats_period(self, domain: str) -> int | None:
+        """Return the configured live balloon stats period, if present."""
+        if not domain or any(char.isspace() for char in domain):
+            raise LibvirtError("invalid domain identifier")
+        xml = self._call("dumpxml", domain)
+        match = re.search(r"<memballoon\b[^>]*>.*?<stats\s+period=['\"](\d+)['\"]\s*/?>", xml, re.DOTALL)
+        return int(match.group(1)) if match else None
+
+    def ensure_memory_stats(self, domain: str, period_seconds: int = 10) -> bool:
+        """Enable balloon stats collection when the domain has no period."""
+        current = self.memory_stats_period(domain)
+        if current is not None and current > 0:
+            return False
+        self._call("dommemstat", domain, "--period", str(period_seconds), "--live", "--config")
+        return True
 
     def setmem(self, domain: str, target_kib: int) -> None:
         if target_kib <= 0:
