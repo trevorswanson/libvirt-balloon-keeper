@@ -45,6 +45,7 @@ def _vm_payload(vm: VMConfig, state=None, telemetry=None, capability=None, error
             "low_usable_percent": p.low_usable_percent, "high_usable_percent": p.high_usable_percent,
             "grow_samples": p.grow_samples, "shrink_samples": p.shrink_samples,
             "cooldown_seconds": p.cooldown_seconds, "stale_after_seconds": p.stale_after_seconds,
+            "grow_cooldown_seconds": p.grow_cooldown_seconds,
             "swap_activity_threshold": p.swap_activity_threshold,
             "state_file": str(vm.state_file), "decision_log": str(vm.decision_log),
             "last_success_epoch": state.last_success_epoch if state else None,
@@ -89,6 +90,7 @@ def inventory_payload(config: AppConfig, adapter=None) -> dict:
                     "max_kib": 16 * KIB_PER_GIB, "step_kib": 512 * 1024,
                     "low_usable_percent": 20, "high_usable_percent": 60,
                     "grow_samples": 2, "shrink_samples": 20, "cooldown_seconds": 300,
+                    "grow_cooldown_seconds": None,
                     "stale_after_seconds": 45, "swap_activity_threshold": 64 * 1024,
                     "state_file": str(storage_root / domain / "state.json") if storage_root else "",
                     "decision_log": str(storage_root / domain / "decisions.jsonl") if storage_root else "",
@@ -154,8 +156,11 @@ def config_from_payload(payload: dict) -> str:
                   ("step_kib", "step_mib"), ("low_usable_percent", "low_usable_percent"),
                   ("high_usable_percent", "high_usable_percent"), ("grow_samples", "grow_samples"),
                   ("shrink_samples", "shrink_samples"), ("cooldown_seconds", "cooldown_seconds"),
+                  ("grow_cooldown_seconds", "grow_cooldown_seconds"),
                   ("stale_after_seconds", "stale_after_seconds"), ("swap_activity_threshold", "swap_activity_threshold"))
         for source, target in fields:
+            if source == "grow_cooldown_seconds" and raw.get(source) is None:
+                continue
             if source in raw:
                 value = raw[source]
                 if not isinstance(value, int) or isinstance(value, bool): raise ValueError(f"{source} must be integer")
@@ -201,7 +206,9 @@ def state_roots_for(config: AppConfig) -> tuple[Path, ...]:
 def create_server(config_path: Path, host: str = "127.0.0.1", port: int = 0, adapter=None,
                   state_roots: tuple[Path, ...] | None = None,
                   socket_path: Path | None = None) -> Union[ThreadingHTTPServer, ThreadingUnixHTTPServer]:
-    config = load_config(config_path)
+    # Installation precedes array mounts. The read-only API may start then;
+    # controller loads and every submitted configuration still require mounts.
+    config = load_config(config_path, require_mounted_pool=False)
     # Anything on the loopback interface can POST a configuration, so the paths
     # it names are confined to the state directories the on-disk config allows.
     if state_roots is None: state_roots = state_roots_for(config)

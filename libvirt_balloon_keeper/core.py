@@ -18,6 +18,7 @@ class PolicyConfig:
     cooldown_seconds: int = 300
     stale_after_seconds: int = 45
     swap_activity_threshold: int = 64 * 1024
+    grow_cooldown_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,10 @@ def decide(policy: PolicyConfig, state: State, telemetry: Telemetry, now: float)
     state.low_samples = state.low_samples + 1 if low_pressure else 0
     state.high_samples = state.high_samples + 1 if high_headroom else 0
 
-    if now - state.last_change_epoch < policy.cooldown_seconds:
+    cooldown = policy.cooldown_seconds
+    if low_pressure and telemetry.actual < policy.max_kib and policy.grow_cooldown_seconds is not None:
+        cooldown = policy.grow_cooldown_seconds
+    if now - state.last_change_epoch < cooldown:
         if low_pressure:
             return f"hold: pending increase ({state.low_samples}/{policy.grow_samples} rounds; cooldown; {usable_percent:.1f}% of target, swap delta {swap_delta})", None
         if high_headroom:

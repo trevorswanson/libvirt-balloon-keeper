@@ -117,7 +117,7 @@ class UnraidScriptTests(unittest.TestCase):
     def test_lifecycle_check_uses_multi_vm_config_validator(self):
         lifecycle = (Path(__file__).parents[1] / "unraid" / "lifecycle.sh").read_text()
         self.assertIn("from pathlib import Path", lifecycle)
-        self.assertIn("load_config(Path(sys.argv[1]))", lifecycle)
+        self.assertIn("load_config(Path(sys.argv[1]), require_mounted_pool=", lifecycle)
 
     def test_install_cron_defers_reconciliation_until_plugin_registration(self):
         repository = Path(__file__).parents[1]

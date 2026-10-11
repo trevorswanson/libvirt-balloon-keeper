@@ -74,7 +74,9 @@ check() {
     command -v virsh >/dev/null
     command -v flock >/dev/null
     [[ -f "$CONFIG" ]]
-    /usr/bin/env PYTHONPATH="$ROOT" /usr/bin/python3 -c 'import sys; from pathlib import Path; from libvirt_balloon_keeper.config import load_config; load_config(Path(sys.argv[1]))' "$CONFIG"
+    # Unraid installs plugins before /mnt/user and physical pools are mounted.
+    # Validate structure at install time; explicit checks/controller stay strict.
+    /usr/bin/env PYTHONPATH="$ROOT" /usr/bin/python3 -c 'import sys; from pathlib import Path; from libvirt_balloon_keeper.config import load_config; load_config(Path(sys.argv[1]), require_mounted_pool=sys.argv[2] != "install")' "$CONFIG" "${1:-runtime}"
 }
 
 stop_api() {
@@ -150,7 +152,7 @@ PY
 }
 
 case "${1:-}" in
-    install|upgrade) install_files; check; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
+    install|upgrade) install_files; check install; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     start) UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     restart) stop_api; UPDATE_CRON="$UPDATE_CRON" "$INSTALLER"; start_api ;;
     rollback) rollback ;;

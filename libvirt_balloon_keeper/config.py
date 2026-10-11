@@ -69,6 +69,7 @@ def _policy(data: dict[str, Any]) -> PolicyConfig:
         grow_samples=_int(data, "grow_samples", 2),
         shrink_samples=_int(data, "shrink_samples", 20),
         cooldown_seconds=_int(data, "cooldown_seconds", 300),
+        grow_cooldown_seconds=_int(data, "grow_cooldown_seconds", 300) if "grow_cooldown_seconds" in data else None,
         stale_after_seconds=_int(data, "stale_after_seconds", 45),
         swap_activity_threshold=_int(data, "swap_activity_threshold", 64 * 1024),
     )
@@ -92,6 +93,8 @@ def validate_policy(policy: PolicyConfig) -> None:
         raise ValueError("timing values are too large")
     if policy.swap_activity_threshold > 2**63:
         raise ValueError("swap_activity_threshold is too large")
+    if policy.grow_cooldown_seconds is not None and not 0 < policy.grow_cooldown_seconds <= MAX_INTERVAL_SECONDS:
+        raise ValueError("grow_cooldown_seconds must be positive and no larger than the timing limit")
 
 
 def _path(value: Any, name: str) -> Path:
@@ -150,7 +153,7 @@ def _vm(raw: dict[str, Any], index: int, defaults: dict[str, Any], state_roots: 
     )
 
 
-def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppConfig:
+def load_config(path: Path, state_roots: tuple[Path, ...] | None = None, *, require_mounted_pool: bool = True) -> AppConfig:
     """Load a configuration; with state_roots, every VM state/audit path must resolve under one of them."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -184,5 +187,5 @@ def load_config(path: Path, state_roots: tuple[Path, ...] | None = None) -> AppC
     selected_pool = _path(pool_root, "pool_root") if pool_root is not None else None
     if selected_pool is not None:
         from .unraid import validate_pool_root
-        validate_pool_root(selected_pool)
+        validate_pool_root(selected_pool, require_mounted=require_mounted_pool)
     return AppConfig(version=version, vms=vms, pool_root=selected_pool)

@@ -61,9 +61,9 @@ def discover_storage_root(mount_root: Path = Path("/mnt"), preferred: Path | Non
     return None
 
 
-def validate_pool_root(path: Path) -> None:
+def validate_pool_root(path: Path, *, require_mounted: bool = True) -> None:
     """Validate an explicitly selected Unraid pool before accepting config."""
-    if path.parent != Path("/mnt") or not _mounted_directory(path):
+    if path.parent != Path("/mnt") or (require_mounted and not _mounted_directory(path)):
         raise ValueError("pool_root must be an existing mounted pool below /mnt")
 
 
